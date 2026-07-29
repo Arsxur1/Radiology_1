@@ -7,7 +7,15 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import routes_audit, routes_health, routes_modes, routes_studies
+from app.api import (
+    routes_audit,
+    routes_findings,
+    routes_health,
+    routes_learning,
+    routes_models,
+    routes_modes,
+    routes_studies,
+)
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -35,6 +43,9 @@ app.include_router(routes_health.router)
 app.include_router(routes_studies.router)
 app.include_router(routes_modes.router)
 app.include_router(routes_audit.router)
+app.include_router(routes_findings.router)
+app.include_router(routes_models.router)
+app.include_router(routes_learning.router)
 
 
 @app.get("/")

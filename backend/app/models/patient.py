@@ -21,7 +21,9 @@ class Patient(UUIDMixin, TimestampMixin, Base):
 
     # Никаких идентифицирующих полей: только внутренний UUID и связи.
     identifiers: Mapped[list[PatientIdentifier]] = relationship(
-        back_populates="patient", cascade="all, delete-orphan"
+        back_populates="patient",
+        cascade="all, delete-orphan",
+        foreign_keys="PatientIdentifier.patient_id",
     )
     studies: Mapped[list["Study"]] = relationship(back_populates="patient")  # noqa: F821
 

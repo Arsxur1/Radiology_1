@@ -46,9 +46,9 @@
 | FR-6 | Измерения, детерминированность | Задел (этап 2): `Finding.measurements` |
 | FR-7 | Сравнение во времени (без ИИ) | Задел (этап 3) |
 | FR-8 | Черновик заключения из подтверждённых находок | Задел (этап 3): `Report` |
-| FR-9 | Захват обучающих данных | Задел (этап 2): `Correction` |
-| FR-10 | Контур развития моделей (PCCP) | Задел (этап 7): `ModelVersion.status`, `core/modes.py` |
-| FR-11 | Контроль дрейфа | Задел (этап 7): `DataDriftMetric` |
+| FR-9 | Захват обучающих данных + экспорт с фильтрами | **Реализовано:** `services/corrections.py`, `services/dataset_export.py`, `api/routes_findings.py`, `api/routes_learning.py` |
+| FR-10 | Контур развития моделей (PCCP): гейт продвижения, откат | **Реализовано (каркас):** `services/model_registry.py`, `api/routes_models.py`; интеграция реальных пайплайнов — этап 7 |
+| FR-11 | Контроль дрейфа: доля отклонений по срезам, новый аппарат | **Реализовано:** `services/drift.py`, `api/routes_learning.py` |
 | FR-12 | Роли и аудит | **Реализовано:** `core/roles.py`, `api/deps.py`, `api/routes_audit.py` |
 
 ## Критерии приёмки (раздел 10)
