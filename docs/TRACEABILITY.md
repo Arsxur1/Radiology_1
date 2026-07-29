@@ -13,7 +13,7 @@
 | SR-4 | Отказ ИИ → режим просмотрщика, доступ к изображениям сохраняется | `api/routes_health.py::ready` (ai изолирован); просмотр не зависит от воркеров |
 | SR-5 | Трассировка: версия модели, хеш весов, серия, время, препроцессинг | `models/ml.py::InferenceResult` (все поля), `ModelVersion.weights_hash` |
 | SR-6 | Отклонение одним действием фиксируется как обучающий сигнал | `models/ml.py::Correction` (`REJECTED`), задел UI этап 2 |
-| SR-7 | Отказ при выходе за границы применимости, без «пониженной уверенности» | `ModelVersion.applicability` (JSONB); `Series.is_3d_capable`; проверка — этап 2 |
+| SR-7 | Отказ при выходе за границы применимости, без «пониженной уверенности» | **Реализовано:** `services/applicability.py::check_applicability` (`test_applicability.py`); `ModelVersion.applicability` (JSONB) |
 | SR-8 | Аудит-лог только на добавление на уровне прав СУБД | `alembic/versions/0002_audit_append_only.py` (триггер + REVOKE + роль) |
 | SR-9 | Обезличивание на границе входа, PHI не покидает контур | `services/anonymization.py`, `models/idmap.py` (отдельная БД postgres-idmap) |
 
@@ -40,10 +40,10 @@
 |---|---|---|
 | FR-1 | Приём, обезличивание, дедуп, связывание пациента, резервная папка | **Реализовано:** `services/ingest.py`, `anonymization.py`, `patient_matching.py`, `workers/folder_watcher.py` |
 | FR-2 | Просмотр (MPR, оконные пресеты, сравнение) | **Реализовано:** OHIF (`frontend/config/ohif.js`), `api/routes_studies.py` |
-| FR-3 | Сегментация + правки → correction | Задел (этап 2): таблицы готовы |
+| FR-3 | Сегментация + правки → correction | **Реализовано (каркас):** `services/segmentation.py`, `api/routes_segmentation.py`, автозапуск `workers/segmentation_tasks.py`; реальная модель — на GPU-стенде |
 | FR-4 | Совмещение модальностей | Задел (этап 6) |
-| FR-5 | 3D-модели, отказ при недостаточной толщине среза | Задел (этап 2): `Series.is_3d_capable` |
-| FR-6 | Измерения, детерминированность | Задел (этап 2): `Finding.measurements` |
+| FR-5 | 3D-модели, отказ при недостаточной толщине среза | **Реализовано (гейт):** `services/mesh.py::can_build_mesh`; геометрия — на стенде |
+| FR-6 | Измерения, детерминированность | **Реализовано:** `services/measurements.py` (`test_measurements.py`) |
 | FR-7 | Сравнение во времени (без ИИ) | Задел (этап 3) |
 | FR-8 | Черновик заключения из подтверждённых находок | Задел (этап 3): `Report` |
 | FR-9 | Захват обучающих данных + экспорт с фильтрами | **Реализовано:** `services/corrections.py`, `services/dataset_export.py`, `api/routes_findings.py`, `api/routes_learning.py` |
@@ -56,8 +56,8 @@
 | Критерий | Как проверяется |
 |---|---|
 | Полная трассируемость | `InferenceResult` + `audit_log`; `GET /audit` |
-| Воспроизводимость | Детерминированные UID/псевдонимы (`test_anonymization.py`); измерения — этап 2 |
-| Отказ вне границ применимости | `is_3d_capable`, `applicability`; проверка — этап 2 |
+| Воспроизводимость | Детерминированные UID/псевдонимы (`test_anonymization.py`) и измерения (`test_measurements.py`) |
+| Отказ вне границ применимости | `services/applicability.py`; `POST /segmentation` → 422 с причинами (`test_applicability.py`) |
 | Отказ ИИ не ломает просмотр | Изоляция воркеров; `GET /ready` |
 | Невозможность подмены аудита | Триггер + права СУБД (миграция 0002); `GET /audit/verify` |
 | Восстановление из бэкапа | `scripts/backup.sh` + проверка на чистом стенде |

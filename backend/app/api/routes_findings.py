@@ -16,9 +16,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentUser, require_roles
 from app.core.roles import Role
 from app.db.session import get_db
-from app.models.ml import Finding
+from app.models.imaging import Series
+from app.models.ml import Finding, FindingSource
 from app.services import corrections
 from app.services.corrections import CorrectionError
+from app.services.mode_state import model_results_visible
 
 router = APIRouter(prefix="/findings", tags=["findings"])
 
@@ -76,7 +78,13 @@ def _out(f: Finding) -> FindingOut:
 
 @router.get("/series/{series_id}", response_model=list[FindingOut])
 def list_series_findings(series_id: uuid.UUID, db: Session = Depends(get_db)) -> list[FindingOut]:
+    """Находки серии. В режиме SHADOW результаты модели не показываются (раздел 2);
+    находки самого врача видны всегда."""
     rows = db.execute(select(Finding).where(Finding.series_id == series_id)).scalars().all()
+    series = db.get(Series, series_id)
+    modality = series.modality if series else None
+    if not model_results_visible(db, modality):
+        rows = [f for f in rows if f.source != FindingSource.MODEL]
     return [_out(f) for f in rows]
 
 

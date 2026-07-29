@@ -55,6 +55,11 @@ def process_raw_instance(self, raw_instance_id: str) -> dict:
                 db, idmap, plan=plan, study_meta=study_meta, series_meta=series_meta
             )
             db.commit()
+            # Автосегментация после приёма (FR-3). No-op, если активной модели нет.
+            if not outcome.duplicate:
+                from app.workers.segmentation_tasks import auto_segment_series
+
+                auto_segment_series.delay(str(outcome.series_id))
             return {
                 "series_id": str(outcome.series_id),
                 "duplicate": outcome.duplicate,
