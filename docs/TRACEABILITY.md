@@ -22,7 +22,7 @@
 | Сущность | Реализация |
 |---|---|
 | `patient` | `models/patient.py::Patient` (UUID — единственный PK) |
-| `patient_identifier` | `models/patient.py::PatientIdentifier` (merge/split, транслитерация) |
+| `patient_identifier` | `models/patient.py::PatientIdentifier` (транслитерация); объединение/разъединение — `services/patient_admin.py`, `api/routes_patients.py`, `patient.merged_into_id` (миграция 0003), тесты `test_patient_admin.py` |
 | `patient_pseudonym_map` | `models/idmap.py` (идентифицирующий контур) |
 | `study` / `series` | `models/imaging.py` (толщина среза, воксель, transfer syntax, lossy) |
 | `model_version` | `models/ml.py::ModelVersion` (границы применимости в JSONB) |

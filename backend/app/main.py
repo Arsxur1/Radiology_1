@@ -15,6 +15,7 @@ from app.api import (
     routes_models,
     routes_modes,
     routes_pacs,
+    routes_patients,
     routes_reports,
     routes_segmentation,
     routes_studies,
@@ -54,6 +55,7 @@ app.include_router(routes_segmentation.router)
 app.include_router(routes_temporal.router)
 app.include_router(routes_reports.router)
 app.include_router(routes_pacs.router)
+app.include_router(routes_patients.router)
 
 
 @app.get("/")

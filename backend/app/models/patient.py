@@ -19,6 +19,12 @@ from app.db.types import GUID
 class Patient(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "patient"
 
+    # Надгробие при объединении: если запись слита в другого пациента — куда именно.
+    # Активный пациент имеет merged_into_id = NULL. Строка не удаляется (история).
+    merged_into_id: Mapped[uuid.UUID | None] = mapped_column(
+        GUID(), ForeignKey("patient.id"), nullable=True
+    )
+
     # Никаких идентифицирующих полей: только внутренний UUID и связи.
     identifiers: Mapped[list[PatientIdentifier]] = relationship(
         back_populates="patient",
@@ -26,6 +32,10 @@ class Patient(UUIDMixin, TimestampMixin, Base):
         foreign_keys="PatientIdentifier.patient_id",
     )
     studies: Mapped[list[Study]] = relationship(back_populates="patient")  # noqa: F821
+
+    @property
+    def is_merged(self) -> bool:
+        return self.merged_into_id is not None
 
 
 class PatientIdentifier(UUIDMixin, TimestampMixin, Base):
