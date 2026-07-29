@@ -14,8 +14,10 @@ from app.api import (
     routes_learning,
     routes_models,
     routes_modes,
+    routes_reports,
     routes_segmentation,
     routes_studies,
+    routes_temporal,
 )
 from app.core.config import get_settings
 
@@ -48,6 +50,8 @@ app.include_router(routes_findings.router)
 app.include_router(routes_models.router)
 app.include_router(routes_learning.router)
 app.include_router(routes_segmentation.router)
+app.include_router(routes_temporal.router)
+app.include_router(routes_reports.router)
 
 
 @app.get("/")
