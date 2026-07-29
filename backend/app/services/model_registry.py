@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -117,7 +117,7 @@ def register_candidate(
         weights_hash=weights_hash,
         applicability=applicability,
         status=ModelStatus.SHADOW,
-        installed_at=datetime.now(timezone.utc),
+        installed_at=datetime.now(UTC),
     )
     db.add(candidate)
     db.flush()

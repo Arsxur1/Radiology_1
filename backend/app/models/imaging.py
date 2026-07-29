@@ -10,18 +10,17 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, Float, ForeignKey, Integer, String
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
+from app.db.types import GUID, JSONB
 
 
 class Study(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "study"
 
     patient_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("patient.id"), nullable=False, index=True
+        GUID(), ForeignKey("patient.id"), nullable=False, index=True
     )
 
     # Обезличенный StudyInstanceUID (после де-ид). Уникален.
@@ -51,7 +50,7 @@ class Series(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "series"
 
     study_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("study.id"), nullable=False, index=True
+        GUID(), ForeignKey("study.id"), nullable=False, index=True
     )
     series_instance_uid: Mapped[str] = mapped_column(
         String(128), unique=True, nullable=False, index=True

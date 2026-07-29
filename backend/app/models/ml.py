@@ -12,11 +12,10 @@ from enum import Enum
 
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import Float, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
+from app.db.types import GUID, JSONB
 
 
 class ModelStatus(str, Enum):
@@ -60,10 +59,10 @@ class InferenceResult(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "inference_result"
 
     series_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("series.id"), nullable=False, index=True
+        GUID(), ForeignKey("series.id"), nullable=False, index=True
     )
     model_version_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("model_version.id"), nullable=False
+        GUID(), ForeignKey("model_version.id"), nullable=False
     )
     # Полная трассировка (SR-5): артефакт, время, метрики, параметры препроцессинга.
     artifact_ref: Mapped[str | None] = mapped_column(String(512), nullable=True)  # S3-ключ
@@ -79,10 +78,10 @@ class Finding(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "finding"
 
     series_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("series.id"), nullable=False, index=True
+        GUID(), ForeignKey("series.id"), nullable=False, index=True
     )
     inference_result_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("inference_result.id"), nullable=True
+        GUID(), ForeignKey("inference_result.id"), nullable=True
     )
     # Код локализации: SNOMED CT либо RadLex (по умолчанию RadLex, см. VOPROSY-K-TZ.md).
     coding_system: Mapped[str] = mapped_column(String(32), default="RadLex", nullable=False)
@@ -112,10 +111,10 @@ class Correction(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "correction"
 
     finding_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("finding.id"), nullable=True, index=True
+        GUID(), ForeignKey("finding.id"), nullable=True, index=True
     )
     series_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("series.id"), nullable=False, index=True
+        GUID(), ForeignKey("series.id"), nullable=False, index=True
     )
     correction_type: Mapped[CorrectionType] = mapped_column(
         SAEnum(CorrectionType, name="correction_type"), nullable=False
@@ -135,7 +134,7 @@ class Report(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "report"
 
     study_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("study.id"), nullable=False, index=True
+        GUID(), ForeignKey("study.id"), nullable=False, index=True
     )
     # Текст черновика; каждое предложение трассируется до finding (sentence_map).
     draft_text: Mapped[str | None] = mapped_column(Text, nullable=True)

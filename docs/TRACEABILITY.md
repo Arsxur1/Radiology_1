@@ -53,11 +53,15 @@
 
 ## Критерии приёмки (раздел 10)
 
+Автоматизированы в `test_acceptance_criteria.py` и `test_integration_flow.py`
+(см. `docs/ACCEPTANCE.md`).
+
 | Критерий | Как проверяется |
 |---|---|
-| Полная трассируемость | `InferenceResult` + `audit_log`; `GET /audit` |
-| Воспроизводимость | Детерминированные UID/псевдонимы (`test_anonymization.py`) и измерения (`test_measurements.py`) |
-| Отказ вне границ применимости | `services/applicability.py`; `POST /segmentation` → 422 с причинами (`test_applicability.py`) |
-| Отказ ИИ не ломает просмотр | Изоляция воркеров; `GET /ready` |
-| Невозможность подмены аудита | Триггер + права СУБД (миграция 0002); `GET /audit/verify` |
+| Полная трассируемость | `InferenceResult` + `audit_log`; `GET /audit`; `test_traceability_inference_and_findings` |
+| Воспроизводимость | Детерминированные UID/псевдонимы и измерения; `test_reproducibility_*` |
+| Отказ вне границ применимости | `services/applicability.py`; `POST /segmentation` → 422; `test_refusal_out_of_range` |
+| Отказ ИИ не ломает просмотр | Изоляция воркеров; `GET /ready`; автосегментация no-op без активной модели |
+| Невозможность подмены аудита | Хеш-цепочка (`test_audit_chain_detects_tampering`) + триггер/права СУБД (миграция 0002); `GET /audit/verify` |
 | Восстановление из бэкапа | `scripts/backup.sh` + проверка на чистом стенде |
+| Сквозной путь целиком | `test_integration_flow.py` (приём→сегментация→правка→заключение) |

@@ -10,14 +10,13 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Enum as SAEnum
 from sqlalchemy import DateTime, String, func
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.modes import OperatingMode
 from app.db.base import Base, UUIDMixin
+from app.db.types import GUID, JSONB
 
 
 class AuditAction(str, Enum):
@@ -47,7 +46,7 @@ class AuditLog(UUIDMixin, Base):
     )
     # На какую сущность направлено действие.
     entity_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    entity_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    entity_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True)
     details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     # Хеш-цепочка: hash(prev_hash + payload). Позволяет обнаружить разрыв.
     prev_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentUser, require_roles
 from app.core.roles import Role
 from app.db.session import get_db
-from app.models.ml import ModelStatus, ModelVersion
+from app.models.ml import ModelVersion
 from app.services import model_registry
 from app.services.model_registry import (
     PromotionCriteria,

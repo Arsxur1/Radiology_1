@@ -6,8 +6,9 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, func
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from app.db.types import GUID
 
 
 class Base(DeclarativeBase):
@@ -17,9 +18,7 @@ class Base(DeclarativeBase):
 class UUIDMixin:
     """Первичный ключ — UUID (ТЗ, раздел 5: ключи — UUID)."""
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(GUID(), primary_key=True, default=uuid.uuid4)
 
 
 class TimestampMixin:

@@ -61,7 +61,9 @@ class TotalSegmentatorAdapter(SegmentationModel):
         self.semver = semver
         self.weights_hash = weights_hash
 
-    def infer(self, series_object_prefix: str, spacing: tuple[float, float, float]) -> SegmentationOutput:  # pragma: no cover
+    def infer(  # pragma: no cover
+        self, series_object_prefix: str, spacing: tuple[float, float, float]
+    ) -> SegmentationOutput:
         # Ленивая загрузка тяжёлых зависимостей — только на стенде.
         # from totalsegmentator.python_api import totalsegmentator
         raise NotImplementedError(

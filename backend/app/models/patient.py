@@ -10,10 +10,10 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import Boolean, ForeignKey, String
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
+from app.db.types import GUID
 
 
 class Patient(UUIDMixin, TimestampMixin, Base):
@@ -25,7 +25,7 @@ class Patient(UUIDMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
         foreign_keys="PatientIdentifier.patient_id",
     )
-    studies: Mapped[list["Study"]] = relationship(back_populates="patient")  # noqa: F821
+    studies: Mapped[list[Study]] = relationship(back_populates="patient")  # noqa: F821
 
 
 class PatientIdentifier(UUIDMixin, TimestampMixin, Base):
@@ -39,7 +39,7 @@ class PatientIdentifier(UUIDMixin, TimestampMixin, Base):
     __tablename__ = "patient_identifier"
 
     patient_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("patient.id"), nullable=False, index=True
+        GUID(), ForeignKey("patient.id"), nullable=False, index=True
     )
     # Тип идентификатора: mrn (номер карты), name_translit, accession и т.п.
     id_type: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -51,7 +51,7 @@ class PatientIdentifier(UUIDMixin, TimestampMixin, Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     # Если запись объединена в другого пациента — куда именно (история merge).
     merged_into: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("patient.id"), nullable=True
+        GUID(), ForeignKey("patient.id"), nullable=True
     )
 
     patient: Mapped[Patient] = relationship(

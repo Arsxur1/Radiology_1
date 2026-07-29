@@ -9,9 +9,8 @@ Create Date: 2026-07-29
 """
 from __future__ import annotations
 
-from alembic import op
-
 import app.models  # noqa: F401  (регистрирует таблицы в metadata)
+from alembic import op
 from app.db.base import Base
 
 revision = "0001"

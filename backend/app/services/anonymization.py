@@ -12,7 +12,6 @@ Confidentiality: убираются/замещаются PHI-теги, гене�
 
 from __future__ import annotations
 
-import datetime as dt
 import hashlib
 import uuid
 from dataclasses import dataclass, field
@@ -97,7 +96,7 @@ def _derive_patient_pseudonym(patient_id: str | None, issuer: str | None) -> uui
     return uuid.UUID(bytes=digest[:16])
 
 
-def build_deid_plan(ds: "Dataset") -> DeidResult:
+def build_deid_plan(ds: Dataset) -> DeidResult:
     """Рассчитать план обезличивания, не изменяя данные (для теста/аудита)."""
     real_name = str(getattr(ds, "PatientName", "") or "") or None
     real_mrn = str(getattr(ds, "PatientID", "") or "") or None
@@ -118,7 +117,7 @@ def build_deid_plan(ds: "Dataset") -> DeidResult:
     )
 
 
-def anonymize_dataset(ds: "Dataset") -> tuple["Dataset", DeidResult]:
+def anonymize_dataset(ds: Dataset) -> tuple[Dataset, DeidResult]:
     """Вернуть обезличенную копию датасета и план де-ид.
 
     Исходный датасет не мутируется. Все UID переписываются детерминированно,

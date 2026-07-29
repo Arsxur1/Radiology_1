@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.imaging import Series, Study
+from app.models.imaging import Study
 
 router = APIRouter(prefix="/studies", tags=["studies"])
 

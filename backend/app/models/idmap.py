@@ -11,8 +11,9 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, String, func
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from app.db.types import GUID
 
 
 class IdMapBase(DeclarativeBase):
@@ -23,11 +24,11 @@ class PatientPseudonymMap(IdMapBase):
     __tablename__ = "patient_pseudonym_map"
 
     id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        GUID(), primary_key=True, default=uuid.uuid4
     )
     # Обезличенный UUID пациента в доверенном контуре.
     pseudonym_patient_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), nullable=False, index=True
+        GUID(), nullable=False, index=True
     )
     # Реальные идентификаторы (PHI) — только здесь.
     source_issuer: Mapped[str | None] = mapped_column(String(128), nullable=True)

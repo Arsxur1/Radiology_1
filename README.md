@@ -71,9 +71,13 @@ make migrate              # применить миграции БД
 cd backend
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
-pytest
+pytest          # unit + интеграционные + приёмочные (docs/ACCEPTANCE.md)
 ruff check .
 ```
+
+Тесты гоняются на in-memory SQLite через переносимые типы (`app/db/types.py`):
+модели те же, что в продакшне на PostgreSQL. CI (`.github/workflows/ci.yml`)
+прогоняет линтер и все тесты на каждый push.
 
 ## Структура репозитория
 
