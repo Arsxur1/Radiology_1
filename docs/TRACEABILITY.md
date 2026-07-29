@@ -38,7 +38,7 @@
 
 | ID | Требование | Статус |
 |---|---|---|
-| FR-1 | Приём, обезличивание, дедуп, связывание пациента, резервная папка | **Реализовано:** `services/ingest.py`, `anonymization.py`, `patient_matching.py`, `workers/folder_watcher.py` |
+| FR-1 | Приём, обезличивание, дедуп, связывание пациента, резервная папка | **Реализовано:** `services/ingest.py`, `anonymization.py`, `patient_matching.py`, `workers/folder_watcher.py`; коннектор к внешнему PACS `services/pacs.py`, `pacs_dicomweb.py`, `api/routes_pacs.py` (C-ECHO/C-FIND/C-MOVE, QIDO/WADO) — см. `docs/PACS-INTEGRATION.md` |
 | FR-2 | Просмотр (MPR, оконные пресеты, сравнение) | **Реализовано:** OHIF (`frontend/config/ohif.js`), `api/routes_studies.py` |
 | FR-3 | Сегментация + правки → correction | **Реализовано (каркас):** `services/segmentation.py`, `api/routes_segmentation.py`, автозапуск `workers/segmentation_tasks.py`; реальная модель — на GPU-стенде |
 | FR-4 | Совмещение модальностей | Задел (этап 6) |

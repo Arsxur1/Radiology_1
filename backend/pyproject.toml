@@ -26,6 +26,10 @@ dev = [
     "pytest-asyncio>=0.23",
     "ruff>=0.4",
 ]
+# Коннектор к внешнему PACS по классическому DICOM-сетевому протоколу (FR-1).
+pacs = [
+    "pynetdicom>=2.0",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
