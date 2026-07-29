@@ -15,6 +15,11 @@ from app.models.ml import (
     Report,
 )
 from app.models.patient import Patient, PatientIdentifier
+from app.models.registration import (
+    Registration,
+    RegistrationReview,
+    RegistrationStage,
+)
 
 __all__ = [
     "Patient",
@@ -34,4 +39,7 @@ __all__ = [
     "AuditAction",
     "OperatingModeState",
     "DataDriftMetric",
+    "Registration",
+    "RegistrationStage",
+    "RegistrationReview",
 ]
