@@ -1,0 +1,64 @@
+"""Извлечение метаданных из обезличенного DICOM для зеркалирования в БД."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+
+def _parse_date(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    for fmt in ("%Y%m%d", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _to_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def extract_study_meta(tags: dict) -> dict:
+    return {
+        "study_instance_uid": tags.get("StudyInstanceUID"),
+        "modality": tags.get("Modality", "OT"),
+        "study_date": _parse_date(tags.get("StudyDate")),
+        "description": tags.get("StudyDescription"),
+        "manufacturer": tags.get("Manufacturer"),
+        "manufacturer_model": tags.get("ManufacturerModelName"),
+        "software_version": tags.get("SoftwareVersions"),
+        "protocol": tags.get("ProtocolName"),
+    }
+
+
+def extract_series_meta(tags: dict) -> dict:
+    pixel_spacing = tags.get("PixelSpacing")
+    spacing = None
+    if pixel_spacing:
+        parts = pixel_spacing if isinstance(pixel_spacing, list) else str(pixel_spacing).split("\\")
+        try:
+            spacing = [float(parts[0]), float(parts[1]), _to_float(tags.get("SpacingBetweenSlices"))]
+        except (ValueError, IndexError):
+            spacing = None
+
+    transfer_syntax = tags.get("TransferSyntaxUID", "")
+    # Список lossy transfer syntaxes (JPEG lossy, JPEG-LS lossy, JPEG2000 lossy).
+    lossy_uids = {"1.2.840.10008.1.2.4.50", "1.2.840.10008.1.2.4.51", "1.2.840.10008.1.2.4.81"}
+
+    return {
+        "series_instance_uid": tags.get("SeriesInstanceUID"),
+        "series_number": int(tags["SeriesNumber"]) if tags.get("SeriesNumber") else None,
+        "modality": tags.get("Modality", "OT"),
+        "description": tags.get("SeriesDescription"),
+        "slice_thickness_mm": _to_float(tags.get("SliceThickness")),
+        "voxel_spacing": spacing,
+        "transfer_syntax": transfer_syntax or None,
+        "lossy_compressed": transfer_syntax in lossy_uids,
+        "contrast_agent": bool(tags.get("ContrastBolusAgent")),
+    }

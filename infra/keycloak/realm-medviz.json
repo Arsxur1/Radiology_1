@@ -1,0 +1,29 @@
+{
+  "realm": "medviz",
+  "enabled": true,
+  "displayName": "Платформа медицинской визуализации",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "roles": {
+    "realm": [
+      { "name": "admin", "description": "Администратор: настройки, смена режимов работы" },
+      { "name": "radiologist", "description": "Врач-рентгенолог: подтверждение находок и правки" },
+      { "name": "clinician", "description": "Клиницист: просмотр и подтверждённые заключения" },
+      { "name": "researcher", "description": "Инженер-исследователь: только обезличенные данные" },
+      { "name": "auditor", "description": "Аудитор: только чтение журналов" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "medviz-backend",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "secret": "change_me_keycloak",
+      "redirectUris": ["http://localhost:8000/*", "http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000", "http://localhost:8000"]
+    }
+  ]
+}

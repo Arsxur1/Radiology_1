@@ -1,0 +1,18 @@
+{
+  "Name": "medviz-clean",
+  "// Комментарий": "Обезличенный узел доверенного контура. Только сюда обращается OHIF Viewer. Идентифицирующих данных не содержит.",
+  "DicomAet": "MEDVIZ_CLEAN",
+  "DicomPort": 4242,
+  "HttpPort": 8042,
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": true,
+  "RegisteredUsers": {
+    "medviz": "change_me_orthanc"
+  },
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/"
+  },
+  "StableAge": 10,
+  "StorageCompression": false
+}

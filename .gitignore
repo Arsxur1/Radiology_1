@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Секреты и локальные настройки
+.env
+.env.local
+
+# Данные и бэкапы (не коммитить PHI/пиксели)
+backups/
+data/
+*.dcm
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,63 @@
+# Матрица трассируемости: ТЗ → реализация
+
+Соответствие требований ТЗ элементам кода этапа 1. «Задел» — структура готова,
+наполнение на указанном этапе. Помогает приёмке (раздел 10) и будущей регистрации.
+
+## Требования безопасности пациента (раздел 3)
+
+| ID | Требование | Где реализовано / заложено |
+|---|---|---|
+| SR-1 | Нет формулировок диагноза, только находки/измерения/уверенность | `models/ml.py::Finding` (коды, измерения; нет поля «диагноз»); генератор черновика — этап 3 |
+| SR-2 | Включение результата — активное действие врача, авто-принятие запрещено | `ConfirmationStatus.PENDING` по умолчанию; нет операции «принять всё» |
+| SR-3 | В ASSIST версия модели зафиксирована, автообновление запрещено технически | `ModelVersion.status`, контур FR-10; проверка перехода `core/modes.py` |
+| SR-4 | Отказ ИИ → режим просмотрщика, доступ к изображениям сохраняется | `api/routes_health.py::ready` (ai изолирован); просмотр не зависит от воркеров |
+| SR-5 | Трассировка: версия модели, хеш весов, серия, время, препроцессинг | `models/ml.py::InferenceResult` (все поля), `ModelVersion.weights_hash` |
+| SR-6 | Отклонение одним действием фиксируется как обучающий сигнал | `models/ml.py::Correction` (`REJECTED`), задел UI этап 2 |
+| SR-7 | Отказ при выходе за границы применимости, без «пониженной уверенности» | `ModelVersion.applicability` (JSONB); `Series.is_3d_capable`; проверка — этап 2 |
+| SR-8 | Аудит-лог только на добавление на уровне прав СУБД | `alembic/versions/0002_audit_append_only.py` (триггер + REVOKE + роль) |
+| SR-9 | Обезличивание на границе входа, PHI не покидает контур | `services/anonymization.py`, `models/idmap.py` (отдельная БД postgres-idmap) |
+
+## Модель данных (раздел 5)
+
+| Сущность | Реализация |
+|---|---|
+| `patient` | `models/patient.py::Patient` (UUID — единственный PK) |
+| `patient_identifier` | `models/patient.py::PatientIdentifier` (merge/split, транслитерация) |
+| `patient_pseudonym_map` | `models/idmap.py` (идентифицирующий контур) |
+| `study` / `series` | `models/imaging.py` (толщина среза, воксель, transfer syntax, lossy) |
+| `model_version` | `models/ml.py::ModelVersion` (границы применимости в JSONB) |
+| `inference_result` | `models/ml.py::InferenceResult` |
+| `correction` | `models/ml.py::Correction` (время в секундах) |
+| `finding` | `models/ml.py::Finding` (source, confirmation_status) |
+| `report` | `models/ml.py::Report` (собирается только из находок) |
+| `audit_log` | `models/audit.py::AuditLog` (append-only, хеш-цепочка) |
+| `data_drift_metric` | `models/drift.py::DataDriftMetric` |
+| `operating_mode` | `models/audit.py::OperatingModeState` |
+
+## Функциональные требования (раздел 6) — статус на этапе 1
+
+| ID | Требование | Статус |
+|---|---|---|
+| FR-1 | Приём, обезличивание, дедуп, связывание пациента, резервная папка | **Реализовано:** `services/ingest.py`, `anonymization.py`, `patient_matching.py`, `workers/folder_watcher.py` |
+| FR-2 | Просмотр (MPR, оконные пресеты, сравнение) | **Реализовано:** OHIF (`frontend/config/ohif.js`), `api/routes_studies.py` |
+| FR-3 | Сегментация + правки → correction | Задел (этап 2): таблицы готовы |
+| FR-4 | Совмещение модальностей | Задел (этап 6) |
+| FR-5 | 3D-модели, отказ при недостаточной толщине среза | Задел (этап 2): `Series.is_3d_capable` |
+| FR-6 | Измерения, детерминированность | Задел (этап 2): `Finding.measurements` |
+| FR-7 | Сравнение во времени (без ИИ) | Задел (этап 3) |
+| FR-8 | Черновик заключения из подтверждённых находок | Задел (этап 3): `Report` |
+| FR-9 | Захват обучающих данных | Задел (этап 2): `Correction` |
+| FR-10 | Контур развития моделей (PCCP) | Задел (этап 7): `ModelVersion.status`, `core/modes.py` |
+| FR-11 | Контроль дрейфа | Задел (этап 7): `DataDriftMetric` |
+| FR-12 | Роли и аудит | **Реализовано:** `core/roles.py`, `api/deps.py`, `api/routes_audit.py` |
+
+## Критерии приёмки (раздел 10)
+
+| Критерий | Как проверяется |
+|---|---|
+| Полная трассируемость | `InferenceResult` + `audit_log`; `GET /audit` |
+| Воспроизводимость | Детерминированные UID/псевдонимы (`test_anonymization.py`); измерения — этап 2 |
+| Отказ вне границ применимости | `is_3d_capable`, `applicability`; проверка — этап 2 |
+| Отказ ИИ не ломает просмотр | Изоляция воркеров; `GET /ready` |
+| Невозможность подмены аудита | Триггер + права СУБД (миграция 0002); `GET /audit/verify` |
+| Восстановление из бэкапа | `scripts/backup.sh` + проверка на чистом стенде |

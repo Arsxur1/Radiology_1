@@ -1,0 +1,20 @@
+{
+  "Name": "medviz-raw",
+  "// Комментарий": "Приёмный узел. Получает исследования с идентифицирующими данными по C-STORE; далее backend обезличивает и перекладывает в clean-узел.",
+  "DicomAet": "MEDVIZ_RAW",
+  "DicomPort": 4242,
+  "HttpPort": 8042,
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": true,
+  "RegisteredUsers": {
+    "medviz": "change_me_orthanc"
+  },
+  "DicomModalities": {},
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/"
+  },
+  "StableAge": 10,
+  "StorageCompression": false,
+  "// PixelDataOnly": "Пиксельные данные остаются в Orthanc/объектном хранилище, не в PostgreSQL"
+}
