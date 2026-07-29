@@ -49,7 +49,7 @@
 | FR-9 | Захват обучающих данных + экспорт с фильтрами | **Реализовано:** `services/corrections.py`, `services/dataset_export.py`, `api/routes_findings.py`, `api/routes_learning.py` |
 | FR-10 | Контур развития моделей (PCCP): гейт продвижения, откат | **Реализовано (каркас):** `services/model_registry.py`, `api/routes_models.py`; интеграция реальных пайплайнов — этап 7 |
 | FR-11 | Контроль дрейфа: доля отклонений по срезам, новый аппарат | **Реализовано:** `services/drift.py`, `api/routes_learning.py` |
-| FR-12 | Роли и аудит | **Реализовано:** `core/roles.py`, `api/deps.py`, `api/routes_audit.py` |
+| FR-12 | Роли и аудит | **Реализовано:** `core/roles.py`, OIDC-валидация токена по JWKS Keycloak `core/security.py` + `api/deps.py` (RS256, iss/aud/exp, realm_access.roles), `api/routes_audit.py` (`test_security.py`) |
 
 ## Критерии приёмки (раздел 10)
 

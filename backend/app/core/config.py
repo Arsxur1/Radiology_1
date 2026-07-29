@@ -54,6 +54,21 @@ class Settings(BaseSettings):
     # Приём
     ingest_watch_dir: str = Field("/data/ingest", alias="INGEST_WATCH_DIR")
 
+    # Аутентификация OIDC (Keycloak)
+    keycloak_url: str = Field("http://keycloak:8080", alias="KEYCLOAK_URL")
+    keycloak_realm: str = Field("medviz", alias="KEYCLOAK_REALM")
+    keycloak_client_id: str = Field("medviz-backend", alias="KEYCLOAK_CLIENT_ID")
+    # Разрешить dev-заголовки X-Debug-* (ТОЛЬКО на изолированных стендах).
+    allow_debug_auth: bool = Field(False, alias="ALLOW_DEBUG_AUTH")
+
+    @property
+    def oidc_issuer(self) -> str:
+        return f"{self.keycloak_url}/realms/{self.keycloak_realm}"
+
+    @property
+    def oidc_jwks_url(self) -> str:
+        return f"{self.oidc_issuer}/protocol/openid-connect/certs"
+
     @property
     def database_url(self) -> str:
         return (
