@@ -38,6 +38,7 @@
 | Мониторинг | Prometheus + Grafana (задел) |
 
 Подробнее — `docs/ARCHITECTURE.md` и `docs/DATA-MODEL.md`.
+Сводка по системе для заказчика и регулятора — `docs/OBZOR-SISTEMY.md`.
 
 ## Ключевые принципы (ТЗ, раздел 11)
 
