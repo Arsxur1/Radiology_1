@@ -104,3 +104,18 @@ export interface DriftSlice {
   rejected: number;
   rate: number;
 }
+
+export type RegistrationStage = "rigid" | "affine" | "deformable";
+export type RegistrationReview = "pending" | "approved" | "rejected";
+
+export interface RegistrationOut {
+  id: string;
+  fixed_series_id: string;
+  moving_series_id: string;
+  stage: RegistrationStage;
+  metric_name: string;
+  metric_value: number | null;
+  quality: Record<string, unknown>;
+  review_status: RegistrationReview;
+  usable_for_measurements: boolean;
+}

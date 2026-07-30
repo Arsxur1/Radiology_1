@@ -9,6 +9,8 @@ import type {
   OperatingMode,
   PromotionEvidence,
   PromotionGateResult,
+  RegistrationOut,
+  RegistrationStage,
   ReportOut,
   StudyOut,
   TemporalSeries,
@@ -48,8 +50,13 @@ export class ApiError extends Error {
 }
 
 export const api = {
-  listStudies: (modality?: string) =>
-    request<StudyOut[]>(`/studies${modality ? `?modality=${modality}` : ""}`),
+  listStudies: (modality?: string, patientId?: string) => {
+    const q = new URLSearchParams();
+    if (modality) q.set("modality", modality);
+    if (patientId) q.set("patient_id", patientId);
+    const qs = q.toString();
+    return request<StudyOut[]>(`/studies${qs ? `?${qs}` : ""}`);
+  },
   getStudy: (id: string) => request<StudyOut>(`/studies/${id}`),
 
   listModes: () => request<ModeOut[]>("/modes"),
@@ -133,4 +140,22 @@ export const api = {
   // ── Контроль дрейфа (FR-11) ──────────────────────────────────────────────
   driftRejectionRate: () =>
     request<{ slices: DriftSlice[] }>("/learning/drift/rejection-rate"),
+
+  // ── Совмещение модальностей (FR-4) ───────────────────────────────────────
+  runRegistration: (payload: {
+    fixed_series_id: string;
+    moving_series_id: string;
+    up_to_stage: RegistrationStage;
+    use_stub: boolean;
+  }) =>
+    request<RegistrationOut>("/registration", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  reviewRegistration: (id: string, approved: boolean) =>
+    request<RegistrationOut>(`/registration/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify({ approved }),
+    }),
 };

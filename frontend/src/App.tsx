@@ -7,6 +7,7 @@ import { ModeBanner } from "./components/ModeBanner";
 import { Admin } from "./pages/Admin";
 import { DriftPanel } from "./pages/DriftPanel";
 import { Login } from "./pages/Login";
+import { ModalityRegistration } from "./pages/ModalityRegistration";
 import { PatientDynamics } from "./pages/PatientDynamics";
 import { StudyReview } from "./pages/StudyReview";
 import { Worklist } from "./pages/Worklist";
@@ -85,6 +86,14 @@ export default function App() {
         element={
           <RequireAuth>
             <PatientDynamics />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/patients/:patientId/registration"
+        element={
+          <RequireAuth>
+            <ModalityRegistration />
           </RequireAuth>
         }
       />

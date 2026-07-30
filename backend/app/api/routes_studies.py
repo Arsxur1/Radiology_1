@@ -39,12 +39,15 @@ class StudyOut(BaseModel):
 @router.get("", response_model=list[StudyOut])
 def list_studies(
     modality: str | None = None,
+    patient_id: uuid.UUID | None = None,
     limit: int = 50,
     db: Session = Depends(get_db),
 ) -> list[StudyOut]:
     stmt = select(Study).order_by(Study.study_date.desc().nullslast()).limit(limit)
     if modality:
         stmt = stmt.where(Study.modality == modality)
+    if patient_id:
+        stmt = stmt.where(Study.patient_id == patient_id)
     studies = db.execute(stmt).scalars().all()
     return [_to_study_out(s) for s in studies]
 

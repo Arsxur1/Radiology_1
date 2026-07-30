@@ -65,7 +65,10 @@ export function StudyReview() {
     <div className="layout">
       <p className="row spread">
         <Link to="/">← К списку</Link>
-        <Link to={`/patients/${study.patient_id}/dynamics`}>Динамика пациента →</Link>
+        <span className="row">
+          <Link to={`/patients/${study.patient_id}/dynamics`}>Динамика пациента →</Link>
+          <Link to={`/patients/${study.patient_id}/registration`}>Совмещение модальностей →</Link>
+        </span>
       </p>
       <h2>
         {study.modality} · {study.description ?? study.study_instance_uid}
