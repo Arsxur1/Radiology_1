@@ -105,6 +105,22 @@ export interface DriftSlice {
   rate: number;
 }
 
+export interface PatientIdentifierOut {
+  id: string;
+  id_type: string;
+  normalized_value: string;
+  issuer: string | null;
+  active: boolean;
+}
+
+export interface PatientOut {
+  id: string;
+  merged_into_id: string | null;
+  is_merged: boolean;
+  identifiers: PatientIdentifierOut[];
+  study_count: number;
+}
+
 export type RegistrationStage = "rigid" | "affine" | "deformable";
 export type RegistrationReview = "pending" | "approved" | "rejected";
 

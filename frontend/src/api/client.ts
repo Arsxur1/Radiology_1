@@ -7,6 +7,7 @@ import type {
   ModeOut,
   ModelOut,
   OperatingMode,
+  PatientOut,
   PromotionEvidence,
   PromotionGateResult,
   RegistrationOut,
@@ -157,5 +158,23 @@ export const api = {
     request<RegistrationOut>(`/registration/${id}/review`, {
       method: "POST",
       body: JSON.stringify({ approved }),
+    }),
+
+  // ── Пациенты: объединение/разъединение (FR-1) ────────────────────────────
+  getPatient: (id: string) => request<PatientOut>(`/patients/${id}`),
+
+  searchPatients: (value: string) =>
+    request<PatientOut[]>(`/patients/search/by-identifier?value=${encodeURIComponent(value)}`),
+
+  mergePatients: (sourceId: string, targetId: string) =>
+    request<PatientOut>("/patients/merge", {
+      method: "POST",
+      body: JSON.stringify({ source_id: sourceId, target_id: targetId }),
+    }),
+
+  splitPatient: (payload: { source_patient_id: string; identifier_ids: string[]; study_ids: string[] }) =>
+    request<PatientOut>("/patients/split", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
 };

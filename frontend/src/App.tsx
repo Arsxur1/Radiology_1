@@ -9,6 +9,7 @@ import { DriftPanel } from "./pages/DriftPanel";
 import { Login } from "./pages/Login";
 import { ModalityRegistration } from "./pages/ModalityRegistration";
 import { PatientDynamics } from "./pages/PatientDynamics";
+import { Patients } from "./pages/Patients";
 import { StudyReview } from "./pages/StudyReview";
 import { Worklist } from "./pages/Worklist";
 
@@ -39,6 +40,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <Link to="/">medviz</Link> · рабочее место врача
         </span>
         <span className="row">
+          {hasRole("admin", "radiologist") && <Link to="/patients">Пациенты</Link>}
           {hasRole("admin") && <Link to="/admin">Администрирование</Link>}
           {hasRole("admin", "auditor") && <Link to="/drift">Дрейф</Link>}
           <button
@@ -110,6 +112,14 @@ export default function App() {
         element={
           <RequireAuth>
             <DriftPanel />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/patients"
+        element={
+          <RequireAuth>
+            <Patients />
           </RequireAuth>
         }
       />
