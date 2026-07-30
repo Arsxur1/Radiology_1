@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { api } from "./api/client";
 import type { OperatingMode } from "./api/types";
-import { authHeaders, clearAuth } from "./auth";
+import { authHeaders, clearAuth, hasRole } from "./auth";
 import { ModeBanner } from "./components/ModeBanner";
+import { Admin } from "./pages/Admin";
+import { DriftPanel } from "./pages/DriftPanel";
 import { Login } from "./pages/Login";
+import { PatientDynamics } from "./pages/PatientDynamics";
 import { StudyReview } from "./pages/StudyReview";
 import { Worklist } from "./pages/Worklist";
 
@@ -34,14 +37,18 @@ function Shell({ children }: { children: React.ReactNode }) {
         <span className="brand">
           <Link to="/">medviz</Link> · рабочее место врача
         </span>
-        <button
-          onClick={() => {
-            clearAuth();
-            nav("/login");
-          }}
-        >
-          Выйти
-        </button>
+        <span className="row">
+          {hasRole("admin") && <Link to="/admin">Администрирование</Link>}
+          {hasRole("admin", "auditor") && <Link to="/drift">Дрейф</Link>}
+          <button
+            onClick={() => {
+              clearAuth();
+              nav("/login");
+            }}
+          >
+            Выйти
+          </button>
+        </span>
       </div>
       {children}
     </>
@@ -70,6 +77,30 @@ export default function App() {
         element={
           <RequireAuth>
             <StudyReview />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/patients/:patientId/dynamics"
+        element={
+          <RequireAuth>
+            <PatientDynamics />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <RequireAuth>
+            <Admin />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/drift"
+        element={
+          <RequireAuth>
+            <DriftPanel />
           </RequireAuth>
         }
       />

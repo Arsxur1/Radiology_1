@@ -1,7 +1,18 @@
 // HTTP-клиент backend. Единая точка добавления заголовков аутентификации.
 
 import { authHeaders } from "../auth";
-import type { FindingOut, ModeOut, ReportOut, StudyOut } from "./types";
+import type {
+  DriftSlice,
+  FindingOut,
+  ModeOut,
+  ModelOut,
+  OperatingMode,
+  PromotionEvidence,
+  PromotionGateResult,
+  ReportOut,
+  StudyOut,
+  TemporalSeries,
+} from "./types";
 
 const BASE = "/api";
 
@@ -75,4 +86,51 @@ export const api = {
 
   finalizeReport: (reportId: string) =>
     request<ReportOut>(`/reports/${reportId}/finalize`, { method: "POST" }),
+
+  // ── Режимы работы (раздел 2) ─────────────────────────────────────────────
+  changeMode: (modality: string, targetMode: OperatingMode) =>
+    request<ModeOut>("/modes", {
+      method: "POST",
+      body: JSON.stringify({ modality, target_mode: targetMode }),
+    }),
+
+  // ── Реестр и жизненный цикл моделей (FR-10) ──────────────────────────────
+  listModels: () => request<ModelOut[]>("/models"),
+
+  registerCandidate: (payload: {
+    name: string;
+    semver: string;
+    weights_hash: string;
+    applicability?: Record<string, unknown>;
+  }) =>
+    request<ModelOut>("/models/candidates", {
+      method: "POST",
+      body: JSON.stringify({ applicability: {}, ...payload }),
+    }),
+
+  evaluateModel: (candidateId: string, evidence: PromotionEvidence) =>
+    request<PromotionGateResult>(`/models/${candidateId}/evaluate`, {
+      method: "POST",
+      body: JSON.stringify(evidence),
+    }),
+
+  promoteModel: (candidateId: string, evidence: PromotionEvidence, justification: string) =>
+    request<ModelOut>(`/models/${candidateId}/promote`, {
+      method: "POST",
+      body: JSON.stringify({ ...evidence, justification }),
+    }),
+
+  rollbackModel: (versionId: string, reason: string) =>
+    request<ModelOut>(`/models/${versionId}/rollback`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  // ── Сравнение во времени (FR-7) ──────────────────────────────────────────
+  patientDynamics: (patientId: string) =>
+    request<TemporalSeries[]>(`/temporal/patient/${patientId}`),
+
+  // ── Контроль дрейфа (FR-11) ──────────────────────────────────────────────
+  driftRejectionRate: () =>
+    request<{ slices: DriftSlice[] }>("/learning/drift/rejection-rate"),
 };

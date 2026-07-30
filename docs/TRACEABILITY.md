@@ -44,11 +44,11 @@
 | FR-4 | Совмещение модальностей (rigid→affine→deformable, MI, проверка врачом) | **Реализовано (каркас):** `models/registration.py`, `services/registration.py` (гейт «неподтверждённое качество не идёт в измерения»), `api/routes_registration.py`, миграция 0004; движок SimpleITK/ANTs — на стенде (`test_registration.py`) |
 | FR-5 | 3D-модели, отказ при недостаточной толщине среза | **Реализовано (гейт):** `services/mesh.py::can_build_mesh`; геометрия — на стенде |
 | FR-6 | Измерения, детерминированность | **Реализовано:** `services/measurements.py` (`test_measurements.py`) |
-| FR-7 | Сравнение во времени (без ИИ) | **Реализовано:** `services/temporal.py`, `temporal_repo.py`, `api/routes_temporal.py` (`test_temporal.py`) |
+| FR-7 | Сравнение во времени (без ИИ) | **Реализовано:** `services/temporal.py`, `temporal_repo.py`, `api/routes_temporal.py` (`test_temporal.py`); UI `frontend/src/pages/PatientDynamics.tsx` с графиками |
 | FR-8 | Черновик заключения из подтверждённых находок | **Реализовано:** `services/report_draft.py`, `report_repo.py`, `report_export.py`, `api/routes_reports.py` (`test_report_draft.py`, `test_report_export.py`) |
 | FR-9 | Захват обучающих данных + экспорт с фильтрами | **Реализовано:** `services/corrections.py`, `services/dataset_export.py`, `api/routes_findings.py`, `api/routes_learning.py`; UI правок `frontend/src/components/FindingCard.tsx` (разделение «черновик ИИ/подтверждено», фиксация времени, без «принять всё») |
-| FR-10 | Контур развития моделей (PCCP): гейт продвижения, откат | **Реализовано (каркас):** `services/model_registry.py`, `api/routes_models.py`; интеграция реальных пайплайнов — этап 7 |
-| FR-11 | Контроль дрейфа: доля отклонений по срезам, новый аппарат | **Реализовано:** `services/drift.py`, `api/routes_learning.py` |
+| FR-10 | Контур развития моделей (PCCP): гейт продвижения, откат | **Реализовано (каркас):** `services/model_registry.py`, `api/routes_models.py`; UI админа `frontend/src/pages/Admin.tsx` (реестр, проверка готовности, продвижение с обоснованием, откат); интеграция реальных пайплайнов — этап 7 |
+| FR-11 | Контроль дрейфа: доля отклонений по срезам, новый аппарат | **Реализовано:** `services/drift.py`, `api/routes_learning.py`; UI `frontend/src/pages/DriftPanel.tsx` с барами по аппаратам |
 | FR-12 | Роли и аудит | **Реализовано:** `core/roles.py`, OIDC-валидация токена по JWKS Keycloak `core/security.py` + `api/deps.py` (RS256, iss/aud/exp, realm_access.roles), `api/routes_audit.py` (`test_security.py`) |
 
 ## Критерии приёмки (раздел 10)

@@ -28,6 +28,7 @@ class SeriesOut(BaseModel):
 
 class StudyOut(BaseModel):
     id: uuid.UUID
+    patient_id: uuid.UUID
     study_instance_uid: str
     modality: str
     description: str | None
@@ -59,6 +60,7 @@ def get_study(study_id: uuid.UUID, db: Session = Depends(get_db)) -> StudyOut:
 def _to_study_out(study: Study) -> StudyOut:
     return StudyOut(
         id=study.id,
+        patient_id=study.patient_id,
         study_instance_uid=study.study_instance_uid,
         modality=study.modality,
         description=study.description,

@@ -15,6 +15,7 @@ export interface SeriesOut {
 
 export interface StudyOut {
   id: string;
+  patient_id: string;
   study_instance_uid: string;
   modality: string;
   description: string | null;
@@ -48,4 +49,58 @@ export interface ReportOut {
   draft_text: string | null;
   sentence_map: Record<string, string>;
   finalized_by: string | null;
+}
+
+export type ModelStatus = "shadow" | "active" | "retired";
+
+export interface ModelOut {
+  id: string;
+  name: string;
+  semver: string;
+  weights_hash: string;
+  status: ModelStatus;
+  applicability: Record<string, unknown>;
+}
+
+export interface PromotionEvidence {
+  frozen_test_cases: number;
+  frozen_test_superior: boolean;
+  shadow_rejection_rate: number | null;
+  no_regression_on_new_devices: boolean;
+}
+
+export interface PromotionGateResult {
+  ok: boolean;
+  reasons: string[];
+}
+
+export interface TemporalDelta {
+  metric: string;
+  previous: number;
+  current: number;
+  absolute: number;
+  percent: number | null;
+  direction: string;
+}
+
+export interface TemporalPoint {
+  study_id: string;
+  study_date: string | null;
+  finding_id: string;
+  measurements: Record<string, number>;
+}
+
+export interface TemporalSeries {
+  key: string;
+  label: string | null;
+  points: TemporalPoint[];
+  deltas: TemporalDelta[];
+}
+
+export interface DriftSlice {
+  dimension: string;
+  value: string;
+  total: number;
+  rejected: number;
+  rate: number;
 }

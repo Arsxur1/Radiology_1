@@ -34,6 +34,31 @@ export function clearAuth(): void {
   localStorage.removeItem(DEBUG_ROLES_KEY);
 }
 
+/**
+ * Роли текущего пользователя — только для показа/скрытия пунктов меню.
+ * Безопасность обеспечивает backend (403). Для dev — из debug-ролей; для OIDC —
+ * из payload JWT (realm_access.roles), декодированного без проверки подписи.
+ */
+export function getRoles(): string[] {
+  const token = getToken();
+  if (token) {
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1] ?? ""));
+      const roles = payload?.realm_access?.roles;
+      return Array.isArray(roles) ? roles : [];
+    } catch {
+      return [];
+    }
+  }
+  const { roles } = getDebugIdentity();
+  return roles ? roles.split(",").map((r) => r.trim()).filter(Boolean) : [];
+}
+
+export function hasRole(...roles: string[]): boolean {
+  const mine = new Set(getRoles());
+  return roles.some((r) => mine.has(r));
+}
+
 export function authHeaders(): Record<string, string> {
   const token = getToken();
   if (token) return { Authorization: `Bearer ${token}` };
