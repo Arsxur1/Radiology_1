@@ -22,3 +22,20 @@ jobs:
         run: ruff check .
       - name: Tests (включая интеграционные и приёмочные)
         run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Build (строгий tsc + vite)
+        run: npm run build
