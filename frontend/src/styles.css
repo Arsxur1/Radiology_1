@@ -1,0 +1,57 @@
+:root {
+  --bg: #0f1216;
+  --panel: #171c23;
+  --border: #2a323d;
+  --text: #e6eaf0;
+  --muted: #97a3b4;
+  --model: #c9922b;      /* «черновик ИИ» — предупреждающий акцент */
+  --confirmed: #2f9e5a;  /* подтверждено врачом */
+  --rejected: #b5443b;
+  --accent: #3b82f6;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+a { color: var(--accent); text-decoration: none; }
+
+.mode-banner {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+.mode-RESEARCH { background: #4a3a12; color: #f4d58d; }
+.mode-SHADOW { background: #333; color: #bbb; }
+.mode-ASSIST { background: #123a24; color: #9be0b4; }
+
+.layout { max-width: 1100px; margin: 0 auto; padding: 16px; }
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.brand { font-weight: 700; }
+
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+.row { display: flex; gap: 12px; align-items: center; }
+.spread { justify-content: space-between; }
+
+.badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.badge-model { background: rgba(201,146,43,.18); color: var(--model); border: 1px solid var(--model); }
+.badge-confirmed { background: rgba(47,158,90,.18); color: var(--confirmed); border: 1px solid var(--confirmed); }
+.badge-rejected { background: rgba(181,68,59,.18); color: var(--rejected); border: 1px solid var(--rejected); }
+.badge-physician { background: rgba(59,130,246,.18); color: var(--accent); border: 1px solid var(--accent); }
+
+button { font: inherit; border-radius: 8px; border: 1px solid var(--border); background: #212832; color: var(--text); padding: 7px 12px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--confirmed); border-color: var(--confirmed); color: #fff; }
+button.danger { background: transparent; border-color: var(--rejected); color: var(--rejected); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+
+.muted { color: var(--muted); font-size: 13px; }
+.meas { font-family: ui-monospace, monospace; font-size: 13px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
+input, select { background: #0f1216; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 8px; }
+.error { color: var(--rejected); font-size: 13px; }

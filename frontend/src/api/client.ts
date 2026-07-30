@@ -1,0 +1,78 @@
+// HTTP-клиент backend. Единая точка добавления заголовков аутентификации.
+
+import { authHeaders } from "../auth";
+import type { FindingOut, ModeOut, ReportOut, StudyOut } from "./types";
+
+const BASE = "/api";
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const resp = await fetch(BASE + path, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+      ...(init?.headers ?? {}),
+    },
+  });
+  if (!resp.ok) {
+    let detail: unknown;
+    try {
+      detail = (await resp.json()).detail;
+    } catch {
+      detail = resp.statusText;
+    }
+    throw new ApiError(resp.status, typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  if (resp.status === 204) return undefined as T;
+  return resp.json() as Promise<T>;
+}
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export const api = {
+  listStudies: (modality?: string) =>
+    request<StudyOut[]>(`/studies${modality ? `?modality=${modality}` : ""}`),
+  getStudy: (id: string) => request<StudyOut>(`/studies/${id}`),
+
+  listModes: () => request<ModeOut[]>("/modes"),
+
+  listSeriesFindings: (seriesId: string) =>
+    request<FindingOut[]>(`/findings/series/${seriesId}`),
+
+  confirmFinding: (id: string, timeSpentSeconds: number) =>
+    request<FindingOut>(`/findings/${id}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ time_spent_seconds: timeSpentSeconds }),
+    }),
+
+  modifyFinding: (
+    id: string,
+    payload: { measurements?: Record<string, unknown>; label?: string; time_spent_seconds: number },
+  ) =>
+    request<FindingOut>(`/findings/${id}/modify`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  rejectFinding: (id: string, reason: string, timeSpentSeconds: number) =>
+    request<FindingOut>(`/findings/${id}/reject`, {
+      method: "POST",
+      body: JSON.stringify({ reason, time_spent_seconds: timeSpentSeconds }),
+    }),
+
+  generateReport: (studyId: string, language = "ru") =>
+    request<ReportOut>("/reports/generate", {
+      method: "POST",
+      body: JSON.stringify({ study_id: studyId, language }),
+    }),
+
+  finalizeReport: (reportId: string) =>
+    request<ReportOut>(`/reports/${reportId}/finalize`, { method: "POST" }),
+};

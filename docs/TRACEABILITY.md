@@ -39,14 +39,14 @@
 | ID | Требование | Статус |
 |---|---|---|
 | FR-1 | Приём, обезличивание, дедуп, связывание пациента, резервная папка | **Реализовано:** `services/ingest.py`, `anonymization.py`, `patient_matching.py`, `workers/folder_watcher.py`; коннектор к внешнему PACS `services/pacs.py`, `pacs_dicomweb.py`, `api/routes_pacs.py` (C-ECHO/C-FIND/C-MOVE, QIDO/WADO) — см. `docs/PACS-INTEGRATION.md` |
-| FR-2 | Просмотр (MPR, оконные пресеты, сравнение) | **Реализовано:** OHIF (`frontend/config/ohif.js`), `api/routes_studies.py` |
+| FR-2 | Просмотр (MPR, оконные пресеты, сравнение) | **Реализовано:** OHIF (`frontend/config/ohif.js`), `api/routes_studies.py`; рабочее место врача (React) `frontend/src/` — worklist, разбор исследования |
 | FR-3 | Сегментация + правки → correction | **Реализовано (каркас):** `services/segmentation.py`, `api/routes_segmentation.py`, автозапуск `workers/segmentation_tasks.py`; реальная модель — на GPU-стенде |
 | FR-4 | Совмещение модальностей (rigid→affine→deformable, MI, проверка врачом) | **Реализовано (каркас):** `models/registration.py`, `services/registration.py` (гейт «неподтверждённое качество не идёт в измерения»), `api/routes_registration.py`, миграция 0004; движок SimpleITK/ANTs — на стенде (`test_registration.py`) |
 | FR-5 | 3D-модели, отказ при недостаточной толщине среза | **Реализовано (гейт):** `services/mesh.py::can_build_mesh`; геометрия — на стенде |
 | FR-6 | Измерения, детерминированность | **Реализовано:** `services/measurements.py` (`test_measurements.py`) |
 | FR-7 | Сравнение во времени (без ИИ) | **Реализовано:** `services/temporal.py`, `temporal_repo.py`, `api/routes_temporal.py` (`test_temporal.py`) |
 | FR-8 | Черновик заключения из подтверждённых находок | **Реализовано:** `services/report_draft.py`, `report_repo.py`, `report_export.py`, `api/routes_reports.py` (`test_report_draft.py`, `test_report_export.py`) |
-| FR-9 | Захват обучающих данных + экспорт с фильтрами | **Реализовано:** `services/corrections.py`, `services/dataset_export.py`, `api/routes_findings.py`, `api/routes_learning.py` |
+| FR-9 | Захват обучающих данных + экспорт с фильтрами | **Реализовано:** `services/corrections.py`, `services/dataset_export.py`, `api/routes_findings.py`, `api/routes_learning.py`; UI правок `frontend/src/components/FindingCard.tsx` (разделение «черновик ИИ/подтверждено», фиксация времени, без «принять всё») |
 | FR-10 | Контур развития моделей (PCCP): гейт продвижения, откат | **Реализовано (каркас):** `services/model_registry.py`, `api/routes_models.py`; интеграция реальных пайплайнов — этап 7 |
 | FR-11 | Контроль дрейфа: доля отклонений по срезам, новый аппарат | **Реализовано:** `services/drift.py`, `api/routes_learning.py` |
 | FR-12 | Роли и аудит | **Реализовано:** `core/roles.py`, OIDC-валидация токена по JWKS Keycloak `core/security.py` + `api/deps.py` (RS256, iss/aud/exp, realm_access.roles), `api/routes_audit.py` (`test_security.py`) |
