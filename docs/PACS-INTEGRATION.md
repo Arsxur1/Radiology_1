@@ -47,6 +47,29 @@
 это настраивается в самом PACS. Если PACS поддерживает **DICOMweb**, задайте
 `dicomweb_base_url` узла и используйте `use_dicomweb: true` (путь QIDO/WADO).
 
+### Настройка «под ключ» (один файл .env)
+
+Чтобы не передавать параметры PACS в каждом запросе, впишите их один раз в `.env`
+(по данным от заказчика — см. таблицу параметров ниже):
+
+```
+PACS_AET=PACSSERVER            # AE Title вашего PACS
+PACS_HOST=192.168.1.50         # IP PACS (или 127.0.0.1, если платформа на том же ПК)
+PACS_PORT=11112                # DICOM-порт (обычно 104 или 11112)
+PACS_LOCAL_AET=MEDVIZ_RAW      # наш приёмный AE
+PACS_DICOMWEB_URL=             # если есть DICOMweb
+PACS_DIRECTION=push            # push | pull
+```
+
+Проверка связи одной командой:
+
+```bash
+make check-pacs      # показывает конфиг и делает C-ECHO к настроенному узлу
+```
+
+Соответствующие эндпоинты: `GET /pacs/config` (показать настройку без секретов),
+`POST /pacs/echo/default` (C-ECHO к узлу из `.env`).
+
 ### Установка зависимостей коннектора
 
 Классический DICOM-сетевой путь требует `pynetdicom`:

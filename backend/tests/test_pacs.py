@@ -46,6 +46,35 @@ def test_parse_qido_study():
     assert study.series_count == 3
 
 
+def test_default_node_none_when_unconfigured(monkeypatch):
+    # Без PACS_* в окружении узел по умолчанию отсутствует (коннектор неактивен).
+    from app.core.config import get_settings
+    from app.services.pacs import default_node_from_settings
+
+    get_settings.cache_clear()
+    for var in ("PACS_AET", "PACS_HOST", "PACS_PORT"):
+        monkeypatch.delenv(var, raising=False)
+    assert default_node_from_settings() is None
+    get_settings.cache_clear()
+
+
+def test_default_node_built_from_env(monkeypatch):
+    from app.core.config import get_settings
+    from app.services.pacs import default_node_from_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("PACS_AET", "REMOTEPACS")
+    monkeypatch.setenv("PACS_HOST", "192.168.1.50")
+    monkeypatch.setenv("PACS_PORT", "11112")
+    node = default_node_from_settings()
+    assert node is not None
+    assert node.aet == "REMOTEPACS"
+    assert node.host == "192.168.1.50"
+    assert node.port == 11112
+    assert node.local_aet == "MEDVIZ_RAW"
+    get_settings.cache_clear()
+
+
 def test_require_pynetdicom_raises_when_absent():
     # Без установленного pynetdicom коннектор даёт явную ошибку, а не падает молча.
     try:

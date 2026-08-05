@@ -30,6 +30,26 @@ class PacsNode:
     dicomweb_base_url: str | None = None  # если PACS поддерживает DICOMweb
 
 
+def default_node_from_settings() -> PacsNode | None:
+    """Узел PACS из конфигурации (.env). Возвращает None, если не заполнен.
+
+    Позволяет один раз прописать параметры PACS от заказчика в .env и работать
+    без передачи узла в каждом вызове (интеграция «под ключ»).
+    """
+    from app.core.config import get_settings
+
+    s = get_settings()
+    if not s.pacs_configured:
+        return None
+    return PacsNode(
+        aet=s.pacs_aet,
+        host=s.pacs_host,
+        port=s.pacs_port,
+        local_aet=s.pacs_local_aet,
+        dicomweb_base_url=s.pacs_dicomweb_url,
+    )
+
+
 @dataclass
 class StudyQuery:
     """Критерии C-FIND / QIDO на уровне STUDY. Пустые поля — не фильтруются."""

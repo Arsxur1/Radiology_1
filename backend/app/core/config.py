@@ -61,6 +61,19 @@ class Settings(BaseSettings):
     # Разрешить dev-заголовки X-Debug-* (ТОЛЬКО на изолированных стендах).
     allow_debug_auth: bool = Field(False, alias="ALLOW_DEBUG_AUTH")
 
+    # Внешний PACS клиники (заполняется по параметрам от заказчика; всё опционально).
+    pacs_aet: str | None = Field(None, alias="PACS_AET")
+    pacs_host: str | None = Field(None, alias="PACS_HOST")
+    pacs_port: int | None = Field(None, alias="PACS_PORT")
+    pacs_local_aet: str = Field("MEDVIZ_RAW", alias="PACS_LOCAL_AET")
+    pacs_dicomweb_url: str | None = Field(None, alias="PACS_DICOMWEB_URL")
+    # Направление обмена: push (PACS шлёт нам) | pull (мы забираем). Информативно.
+    pacs_direction: str = Field("push", alias="PACS_DIRECTION")
+
+    @property
+    def pacs_configured(self) -> bool:
+        return bool(self.pacs_aet and self.pacs_host and self.pacs_port)
+
     @property
     def oidc_issuer(self) -> str:
         return f"{self.keycloak_url}/realms/{self.keycloak_realm}"

@@ -10,9 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.api.deps import CurrentUser, require_roles
+from app.core.config import get_settings
 from app.core.roles import Role
 from app.services import pacs, pacs_dicomweb
-from app.services.pacs import PacsNode, PacsUnavailable, StudyQuery
+from app.services.pacs import PacsNode, PacsUnavailable, StudyQuery, default_node_from_settings
 
 router = APIRouter(prefix="/pacs", tags=["pacs"])
 
@@ -53,6 +54,41 @@ def _query(q: QueryIn) -> StudyQuery:
         patient_id=q.patient_id, study_date=q.study_date, modality=q.modality,
         accession_number=q.accession_number, study_instance_uid=q.study_instance_uid,
     )
+
+
+@router.get("/config")
+def pacs_config(_: CurrentUser = Depends(require_roles(Role.ADMIN))) -> dict:
+    """Показать настроенный узел PACS из .env (без секретов). Для проверки конфигурации."""
+    s = get_settings()
+    return {
+        "configured": s.pacs_configured,
+        "aet": s.pacs_aet,
+        "host": s.pacs_host,
+        "port": s.pacs_port,
+        "local_aet": s.pacs_local_aet,
+        "dicomweb_url": s.pacs_dicomweb_url,
+        "direction": s.pacs_direction,
+    }
+
+
+def _default_node_or_400() -> PacsNode:
+    node = default_node_from_settings()
+    if node is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Узел PACS не настроен. Заполните PACS_AET/PACS_HOST/PACS_PORT в .env",
+        )
+    return node
+
+
+@router.post("/echo/default")
+def echo_default(_: CurrentUser = Depends(require_roles(Role.ADMIN))) -> dict:
+    """C-ECHO к настроенному в .env узлу PACS (без передачи параметров)."""
+    try:
+        result = pacs.echo(_default_node_or_400())
+    except PacsUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    return {"ok": result.ok, "detail": result.detail}
 
 
 @router.post("/echo")
