@@ -126,6 +126,7 @@ def persist_ingest(
             manufacturer_model=study_meta.get("manufacturer_model"),
             software_version=study_meta.get("software_version"),
             protocol=study_meta.get("protocol"),
+            patient_age_years=study_meta.get("patient_age_years"),
             orthanc_study_id=study_meta.get("orthanc_study_id"),
         )
         db.add(study)

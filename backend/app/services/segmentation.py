@@ -52,6 +52,8 @@ def _series_context(series: Series, study: Study, age_years: float | None) -> Se
     body_part = None
     if study.protocol and "chest" in study.protocol.lower():
         body_part = "CHEST"
+    # Явно переданный возраст приоритетен; иначе берём возраст из исследования (SR-7).
+    effective_age = age_years if age_years is not None else study.patient_age_years
     return SeriesContext(
         modality=series.modality,
         body_part=body_part,
@@ -59,7 +61,7 @@ def _series_context(series: Series, study: Study, age_years: float | None) -> Se
         manufacturer=study.manufacturer,
         lossy_compressed=series.lossy_compressed,
         contrast_agent=series.contrast_agent,
-        patient_age_years=age_years,
+        patient_age_years=effective_age,
     )
 
 

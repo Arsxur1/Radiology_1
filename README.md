@@ -54,6 +54,7 @@
 cp .env.example .env      # отредактируйте секреты
 make up                   # или: docker compose up -d --build
 make migrate              # применить миграции БД
+make seed                 # (опционально) демо-данные для показа без PACS/GPU
 ```
 
 Сервисы после запуска:

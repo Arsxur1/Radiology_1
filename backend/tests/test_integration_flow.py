@@ -174,6 +174,28 @@ def test_flow_temporal_dynamics(db):
     assert delta.direction == "рост"
 
 
+def test_age_from_study_passes_gate(db):
+    # Возраст из исследования (без явной передачи) проходит взрослый гейт (SR-7).
+    _, study, series = _make_series(db)
+    study.patient_age_years = 45.0
+    db.flush()
+    mv = _model(db)
+    model = StubSegmentationModel(["heart"], weights_hash=mv.weights_hash)
+    outcome = segmentation.segment_series(db, series=series, model_version=mv, model=model)
+    assert outcome.structure_count == 1
+
+
+def test_age_from_study_pediatric_refused(db):
+    # Младенец в исследовании → отказ взрослой модели даже без явной передачи возраста.
+    _, study, series = _make_series(db)
+    study.patient_age_years = 1.5
+    db.flush()
+    mv = _model(db)
+    model = StubSegmentationModel(["heart"], weights_hash=mv.weights_hash)
+    with pytest.raises(ApplicabilityRefused):
+        segmentation.segment_series(db, series=series, model_version=mv, model=model)
+
+
 def test_report_rejects_unconfirmed_via_service(db):
     # Прямая сборка из неподтверждённой находки запрещена (FR-8).
     from app.services.report_draft import FindingInput, build_draft

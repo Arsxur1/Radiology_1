@@ -52,9 +52,13 @@ def auto_segment_series(series_id: str, use_stub: bool = True) -> dict:
 
             model = TotalSegmentatorAdapter(weights_hash=model_version.weights_hash)
 
+        # Возраст пациента нужен для границ применимости (SR-7).
+        age_years = series.study.patient_age_years if series.study else None
+
         try:
             outcome = segmentation.segment_series(
                 db, series=series, model_version=model_version, model=model,
+                age_years=age_years,
             )
             db.commit()
             return {"structure_count": outcome.structure_count}

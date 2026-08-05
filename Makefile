@@ -11,6 +11,7 @@ help:
 	@echo "fmt        — ruff format"
 	@echo "backup     — бэкап PostgreSQL + MinIO"
 	@echo "check-pacs — проверить связь с настроенным PACS (.env)"
+	@echo "seed       — загрузить демо-данные для показа (без PACS/GPU)"
 
 up:
 	docker compose up -d --build
@@ -45,3 +46,6 @@ backup:
 
 check-pacs:
 	bash scripts/check_pacs.sh
+
+seed:
+	docker compose exec backend python scripts/seed_demo.py

@@ -37,6 +37,10 @@ class Study(UUIDMixin, TimestampMixin, Base):
     software_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
     protocol: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
+    # Возраст пациента на момент исследования (лет). Нужен для границ применимости
+    # (SR-7): взрослые/дети валидируются раздельно. Дата рождения при этом удаляется.
+    patient_age_years: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Ссылка на исследование в чистом Orthanc.
     orthanc_study_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 

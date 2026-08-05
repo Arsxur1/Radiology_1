@@ -24,6 +24,25 @@ def _to_float(value: Any) -> float | None:
         return None
 
 
+def parse_dicom_age(value: str | None) -> float | None:
+    """Разобрать DICOM PatientAge (формат nnnD/W/M/Y) в годы.
+
+    Примеры: "045Y" → 45.0, "018M" → 1.5, "030W" → ~0.577, "007D" → ~0.019.
+    Возраст нужен для границ применимости (SR-7): взрослые/дети раздельно.
+    """
+    if not value:
+        return None
+    value = str(value).strip().upper()
+    unit = value[-1] if value[-1:] in ("D", "W", "M", "Y") else "Y"
+    digits = value[:-1] if value[-1:] in ("D", "W", "M", "Y") else value
+    try:
+        n = float(digits)
+    except ValueError:
+        return None
+    factor = {"Y": 1.0, "M": 1 / 12.0, "W": 1 / 52.0, "D": 1 / 365.0}[unit]
+    return round(n * factor, 3)
+
+
 def extract_study_meta(tags: dict) -> dict:
     return {
         "study_instance_uid": tags.get("StudyInstanceUID"),
@@ -34,6 +53,7 @@ def extract_study_meta(tags: dict) -> dict:
         "manufacturer_model": tags.get("ManufacturerModelName"),
         "software_version": tags.get("SoftwareVersions"),
         "protocol": tags.get("ProtocolName"),
+        "patient_age_years": parse_dicom_age(tags.get("PatientAge")),
     }
 
 
