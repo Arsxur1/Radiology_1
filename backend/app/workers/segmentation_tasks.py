@@ -22,7 +22,7 @@ from app.models.ml import ModelStatus, ModelVersion
 from app.services import segmentation
 from app.services.inference_adapters import StubSegmentationModel
 from app.services.segmentation import ApplicabilityRefused
-from app.services.structure_catalog import structures_for_region
+from app.services.structure_catalog import region_from_protocol, structures_for_region
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,12 @@ def auto_segment_series(series_id: str, use_stub: bool = True) -> dict:
             return {"skipped": "no_active_model"}
 
         if use_stub:
-            keys = [s.key for s in structures_for_region("CHEST")]
+            # Область определяется по протоколу исследования (грудь/живот/мозг).
+            study = series.study
+            region = region_from_protocol(
+                study.protocol if study else None, study.description if study else None
+            ) or "CHEST"
+            keys = [s.key for s in structures_for_region(region)]
             model = StubSegmentationModel(keys, weights_hash=model_version.weights_hash)
         else:  # pragma: no cover
             from app.services.inference_adapters import TotalSegmentatorAdapter

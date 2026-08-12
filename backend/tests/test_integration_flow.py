@@ -196,6 +196,43 @@ def test_age_from_study_pediatric_refused(db):
         segmentation.segment_series(db, series=series, model_version=mv, model=model)
 
 
+def test_abdomen_region_flow(db):
+    # Область определяется по протоколу «брюшной полости»; создаются её структуры.
+    from app.models.imaging import Series, Study
+    from app.models.ml import Finding
+    from app.models.patient import Patient
+    from app.services.structure_catalog import structures_for_region
+
+    patient = Patient()
+    db.add(patient)
+    db.flush()
+    study = Study(
+        patient_id=patient.id, study_instance_uid="ab-1", modality="CT",
+        manufacturer="Siemens", protocol="КТ брюшной полости", patient_age_years=50.0,
+    )
+    db.add(study)
+    db.flush()
+    series = Series(
+        study_id=study.id, series_instance_uid="ab-1-s", modality="CT",
+        slice_thickness_mm=1.0, voxel_spacing=[0.7, 0.7, 1.0], object_prefix="ab/1",
+    )
+    db.add(series)
+    db.flush()
+
+    abdomen_applic = {**CHEST_APPLICABILITY, "body_part": ["ABDOMEN"]}
+    mv = ModelVersion(name="abd", semver="1.0.0", weights_hash="h",
+                      applicability=abdomen_applic, status=ModelStatus.ACTIVE)
+    db.add(mv)
+    db.flush()
+    keys = [s.key for s in structures_for_region("ABDOMEN")]
+    model = StubSegmentationModel(keys, weights_hash="h")
+
+    outcome = segmentation.segment_series(db, series=series, model_version=mv, model=model)
+    assert outcome.structure_count == len(keys)
+    labels = {f.label for f in db.query(Finding).all()}
+    assert "Печень" in labels
+
+
 def test_report_rejects_unconfirmed_via_service(db):
     # Прямая сборка из неподтверждённой находки запрещена (FR-8).
     from app.services.report_draft import FindingInput, build_draft
