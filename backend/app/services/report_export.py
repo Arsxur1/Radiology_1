@@ -61,12 +61,41 @@ def render_html(data: ReportExportInput) -> str:
 
 
 def build_dicom_sr(data: ReportExportInput):  # pragma: no cover
-    """Построить DICOM SR из подтверждённых находок. Подключается на стенде.
+    """Построить DICOM SR (Basic Text SR) из подтверждённых находок.
 
-    Использует pydicom для формирования Basic Text SR / Comprehensive SR, где
-    каждый пункт содержания трассируется до находки. Изображения не анализируются —
-    берутся готовые структурированные данные (FR-8).
+    Дерево содержания формируется чистой функцией `report_sr.build_sr_content`
+    (тестируемо), здесь оно сериализуется в DICOM через pydicom. Каждый пункт
+    трассируется до находки. Изображения не анализируются (FR-8). pydicom
+    импортируется лениво — на стенде.
     """
-    raise NotImplementedError(
-        "Сборка DICOM SR через pydicom подключается на стенде; структура — из sentence_map"
-    )
+    import pydicom
+    from pydicom.dataset import Dataset
+    from pydicom.sequence import Sequence
+
+    from app.services.report_sr import VT_CONTAINER, build_sr_content
+
+    root = build_sr_content(data)
+
+    ds = Dataset()
+    ds.Modality = "SR"
+    ds.SeriesDescription = "medviz report (draft)"
+    ds.ValueType = VT_CONTAINER
+    ds.ContinuityOfContent = "SEPARATE"
+    # Черновик, требующий подтверждения (не верифицированное заключение).
+    ds.CompletionFlag = "PARTIAL"
+    ds.VerificationFlag = "UNVERIFIED"
+
+    content = []
+    for child in root.children:
+        item = Dataset()
+        item.RelationshipType = "CONTAINS"
+        item.ValueType = child.value_type
+        item.TextValue = child.text or ""
+        # Трассировка до находки — в TrackingUID.
+        if child.finding_id:
+            item.TrackingUID = child.finding_id
+        content.append(item)
+    ds.ContentSequence = Sequence(content)
+
+    _ = pydicom  # использование импортированного модуля (метаданные файла — на стенде)
+    return ds

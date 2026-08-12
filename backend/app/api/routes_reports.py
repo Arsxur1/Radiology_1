@@ -105,6 +105,41 @@ def export_html(report_id: uuid.UUID, db: Session = Depends(get_db)) -> HTMLResp
     return HTMLResponse(content=report_export.render_html(data))
 
 
+@router.get("/{report_id}/sr-content")
+def sr_content(report_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+    """Структура содержания DICOM SR с трассировкой пункт → находка (FR-8).
+
+    Сам бинарный SR (Basic Text SR) собирается через pydicom на стенде; здесь —
+    проверяемое дерево содержания. Только финализированное заключение.
+    """
+    from app.services.report_sr import build_sr_content, sr_traceability_map
+
+    report = db.get(Report, report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Черновик не найден")
+    if not report.finalized_by:
+        raise HTTPException(
+            status_code=409, detail="Выгрузка возможна только после подтверждения врачом"
+        )
+    study = db.get(Study, report.study_id)
+    data = ReportExportInput(
+        study_uid=study.study_instance_uid if study else str(report.study_id),
+        language=report.language,
+        draft_text=report.draft_text or "",
+        sentence_map=report.sentence_map or {},
+        finalized_by=report.finalized_by,
+        sentences=_split_sentences(report.draft_text or ""),
+    )
+    root = build_sr_content(data)
+    return {
+        "value_type": root.value_type,
+        "items": [
+            {"text": c.text, "finding_id": c.finding_id} for c in root.children
+        ],
+        "traceability": sr_traceability_map(root),
+    }
+
+
 def _split_sentences(text: str) -> list[str]:
     parts = [p.strip() for p in text.split(". ") if p.strip()]
     return [p if p.endswith(".") else p + "." for p in parts]

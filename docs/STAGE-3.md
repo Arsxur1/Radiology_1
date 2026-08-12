@@ -51,8 +51,10 @@ API: `GET /temporal/patient/{patient_id}` → ряды по структурам
 - **HTML → PDF:** `GET /reports/{id}/export.html` — самодостаточный HTML,
   печатается в PDF офлайн; тяжёлый рендер PDF подключается на стенде. Выгрузка
   доступна только после финализации.
-- **DICOM SR:** `report_export.build_dicom_sr` — структурированный документ, где
-  каждый пункт трассируется до находки; сборка через pydicom на стенде.
+- **DICOM SR:** дерево содержания строит чистая функция `report_sr.build_sr_content`
+  (Basic Text SR: контейнер + текстовые пункты, каждый трассируется до находки через
+  TrackingUID); `report_export.build_dicom_sr` сериализует его в DICOM через pydicom на
+  стенде. Проверить трассировку без стенда: `GET /reports/{id}/sr-content`.
 
 ## API этапа 3
 
