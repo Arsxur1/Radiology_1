@@ -15,7 +15,7 @@
 | SR-6 | Отклонение одним действием фиксируется как обучающий сигнал | `models/ml.py::Correction` (`REJECTED`), задел UI этап 2 |
 | SR-7 | Отказ при выходе за границы применимости, без «пониженной уверенности» | **Реализовано:** `services/applicability.py::check_applicability` (`test_applicability.py`); возраст пациента извлекается из DICOM при приёме (`Study.patient_age_years`, `dicom_meta.parse_dicom_age`) и передаётся в гейт при авто- и ручной сегментации; `ModelVersion.applicability` (JSONB) |
 | SR-8 | Аудит-лог только на добавление на уровне прав СУБД | `alembic/versions/0002_audit_append_only.py` (триггер + REVOKE + роль) |
-| SR-9 | Обезличивание на границе входа, PHI не покидает контур | `services/anonymization.py`, `models/idmap.py` (отдельная БД postgres-idmap) |
+| SR-9 | Обезличивание на границе входа, PHI не покидает контур | `services/anonymization.py` (расширенный чёрный список PHI + удаление приватных тегов, кривых и оверлеев), `models/idmap.py` (отдельная БД postgres-idmap) |
 
 ## Модель данных (раздел 5)
 

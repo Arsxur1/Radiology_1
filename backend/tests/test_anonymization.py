@@ -31,15 +31,21 @@ def test_plan_captures_phi_and_removes_tags():
         IssuerOfPatientID="clinic-1",
         StudyInstanceUID="1.2.3.4.5.6",
         AccessionNumber="ACC-1",
+        PatientBirthTime="120000",
+        StudyID="STU-9",
+        DeviceSerialNumber="SN-777",
         Modality="CT",
     )
     plan = build_deid_plan(ds)
     assert plan.real_mrn == "MRN-42"
     assert plan.real_name == "Иванов Пётр"
     assert plan.pseudonym_study_uid == _derive_uid("1.2.3.4.5.6")
-    # PHI-теги помечены к удалению.
+    # PHI-теги помечены к удалению (в т.ч. расширенный набор SR-9).
     assert "PatientName" in plan.removed_tags
     assert "PatientID" in plan.removed_tags
     assert "AccessionNumber" in plan.removed_tags
+    assert "PatientBirthTime" in plan.removed_tags
+    assert "StudyID" in plan.removed_tags
+    assert "DeviceSerialNumber" in plan.removed_tags
     # Клинически значимый тег (модальность) НЕ в списке на удаление.
     assert "Modality" not in plan.removed_tags

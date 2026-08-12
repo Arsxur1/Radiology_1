@@ -27,7 +27,10 @@ except Exception:  # pragma: no cover
 UID_ROOT = "1.2.826.0.1.3680043.10.9999"
 
 # Теги, удаляемые полностью (PHI, не нужны для анализа).
+# Приватные теги, кривые и оверлеи удаляются отдельно в anonymize_dataset —
+# они тоже могут содержать идентифицирующую информацию (SR-9).
 TAGS_TO_REMOVE = [
+    # Идентификаторы пациента
     "PatientName",
     "PatientID",
     "OtherPatientIDs",
@@ -37,9 +40,25 @@ TAGS_TO_REMOVE = [
     "PatientAddress",
     "PatientTelephoneNumbers",
     "PatientTelecomInformation",
+    "PatientBirthTime",
+    "PatientComments",
+    "MilitaryRank",
+    "BranchOfService",
+    "EthnicGroup",
+    "Occupation",
+    "AdditionalPatientHistory",
+    "PatientReligiousPreference",
+    "ResponsiblePerson",
+    "ResponsibleOrganization",
+    "CountryOfResidence",
+    "RegionOfResidence",
+    "PatientInsurancePlanCodeSequence",
+    # Персонал и учреждение
     "ReferringPhysicianName",
     "ReferringPhysicianTelephoneNumbers",
+    "ReferringPhysicianAddress",
     "PerformingPhysicianName",
+    "PhysiciansOfRecord",
     "OperatorsName",
     "InstitutionName",
     "InstitutionAddress",
@@ -48,7 +67,15 @@ TAGS_TO_REMOVE = [
     "IssuerOfPatientID",
     "AccessionNumber",
     "RequestingPhysician",
+    "RequestingService",
     "NameOfPhysiciansReadingStudy",
+    # Прочие идентифицирующие
+    "DeviceSerialNumber",
+    "StudyID",
+    "PerformedProcedureStepID",
+    "ScheduledProcedureStepID",
+    "RequestAttributesSequence",
+    "OrderCallbackPhoneNumber",
 ]
 
 # Теги, сохраняемые для клинической ценности (аппарат, геометрия, протокол).
@@ -133,6 +160,16 @@ def anonymize_dataset(ds: Dataset) -> tuple[Dataset, DeidResult]:
     for tag in TAGS_TO_REMOVE:
         if hasattr(clean, tag):
             delattr(clean, tag)
+
+    # Приватные теги могут содержать вендор-специфичную PHI — удаляем целиком (SR-9).
+    clean.remove_private_tags()
+
+    # Кривые (group 50xx) и оверлеи (group 60xx) могут содержать «вжатые» надписи
+    # с идентифицирующими данными — вырезаем.
+    for elem in list(clean):
+        group = elem.tag.group
+        if 0x5000 <= group <= 0x50FF or 0x6000 <= group <= 0x60FF:
+            del clean[elem.tag]
 
     # Псевдонимные идентификаторы вместо PHI.
     clean.PatientID = plan.pseudonym_patient_id.hex
