@@ -71,8 +71,10 @@ def build_card(
     excluded_labels: list[str],
     metrics: dict,
     frozen_digest: str,
+    operating_points: dict[str, dict] | None = None,
 ) -> dict:
     return {
+        "task": "classification",
         "name": name,
         "semver": semver,
         "weights_hash": weights_hash,
@@ -82,6 +84,8 @@ def build_card(
         "datasets": datasets,
         "excluded_labels": excluded_labels,
         "metrics_validate": metrics,
+        # Пороги по валидации: ниже порога находка-черновик не создаётся.
+        "operating_points": operating_points or {},
         "frozen_test_digest": frozen_digest,
         "created_at": datetime.now(UTC).isoformat(),
         "intended_use": "Находки-черновики для подтверждения врачом; не диагноз (SR-1).",
@@ -96,4 +100,6 @@ def registration_payload(card: dict) -> dict:
         "semver": card["semver"],
         "weights_hash": card["weights_hash"],
         "applicability": card["applicability"],
+        "task": card.get("task", "classification"),
+        "operating_points": {c: {"threshold": op["threshold"]} for c, op in card.get("operating_points", {}).items()},
     }

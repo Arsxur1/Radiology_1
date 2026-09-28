@@ -14,12 +14,9 @@ from __future__ import annotations
 import logging
 import uuid
 
-from sqlalchemy import select
-
 from app.db.session import SessionLocal
 from app.models.imaging import Series
-from app.models.ml import ModelStatus, ModelVersion
-from app.services import segmentation
+from app.services import model_registry, segmentation
 from app.services.inference_adapters import StubSegmentationModel
 from app.services.segmentation import ApplicabilityRefused
 from app.services.structure_catalog import region_from_protocol, structures_for_region
@@ -37,9 +34,9 @@ def auto_segment_series(series_id: str, use_stub: bool = True) -> dict:
         if series is None:
             return {"skipped": "series_not_found"}
 
-        model_version = db.execute(
-            select(ModelVersion).where(ModelVersion.status == ModelStatus.ACTIVE)
-        ).scalars().first()
+        # Только модели сегментации, заявленные для модальности серии.
+        candidates = model_registry.models_for(db, task="segmentation", modality=series.modality)
+        model_version = candidates[0] if candidates else None
         if model_version is None:
             # Нет допущенной модели — контур просмотра/приёма не страдает (SR-4).
             return {"skipped": "no_active_model"}

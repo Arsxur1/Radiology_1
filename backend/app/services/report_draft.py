@@ -78,6 +78,9 @@ def _render_sentence(f: FindingInput, language: str) -> str:
     code_ref = f" [{f.coding_system}:{f.code}]" if f.code else ""
     if parts:
         return f"{name}{code_ref} — {'; '.join(parts)}."
+    if (f.code or "").startswith("CXR-"):
+        # Качественная находка словаря ОГК: измерений не предполагает.
+        return f"{name}{code_ref}."
     return f"{name}{code_ref} — измерения отсутствуют."
 
 

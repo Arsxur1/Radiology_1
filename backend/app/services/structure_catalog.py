@@ -68,6 +68,7 @@ _REGION_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("chest", "CHEST"),
     ("thorax", "THORAX"),
     ("грудн", "CHEST"),
+    ("огк", "CHEST"),          # «рентгенография ОГК» — типичное описание в РУз/СНГ
     ("lung", "CHEST"),
     ("abdom", "ABDOMEN"),
     ("брюш", "ABDOMEN"),

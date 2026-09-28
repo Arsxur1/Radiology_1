@@ -60,6 +60,27 @@ export interface ModelOut {
   weights_hash: string;
   status: ModelStatus;
   applicability: Record<string, unknown>;
+  task: "segmentation" | "classification";
+  operating_points: Record<string, { threshold: number }>;
+}
+
+export interface ShadowCounts {
+  tp: number;
+  fp: number;
+  fn: number;
+}
+
+export interface ShadowReport {
+  model: string;
+  shadow_runs: number;
+  reviewed_cases: number;
+  disagreement_rate: number | null;
+  miss_rate: number | null;
+  per_code: Record<string, ShadowCounts & { tn: number; sensitivity: number | null; ppv: number | null }>;
+  per_manufacturer: Record<
+    string,
+    ShadowCounts & { cases: number; disagreement_rate: number | null; miss_rate: number | null }
+  >;
 }
 
 export interface PromotionEvidence {

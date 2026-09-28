@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     # Направление обмена: push (PACS шлёт нам) | pull (мы забираем). Информативно.
     pacs_direction: str = Field("push", alias="PACS_DIRECTION")
 
+    # Каталог весов моделей: файл <weights_hash>.pt, хеш сверяется при загрузке (SR-5).
+    models_dir: str = Field("/data/models", alias="MEDVIZ_MODELS_DIR")
+
     @property
     def pacs_configured(self) -> bool:
         return bool(self.pacs_aet and self.pacs_host and self.pacs_port)

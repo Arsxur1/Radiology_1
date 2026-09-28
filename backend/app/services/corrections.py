@@ -33,6 +33,16 @@ class CorrectionError(Exception):
     """Нарушение инварианта захвата правок."""
 
 
+def _get_actionable(db: Session, finding_id: uuid.UUID) -> Finding:
+    finding = db.get(Finding, finding_id)
+    if finding is None:
+        raise CorrectionError("Находка не найдена")
+    # Результат теневого прогона врачу не показывается — и действий по нему нет.
+    if finding.inference_result is not None and finding.inference_result.shadow_run:
+        raise CorrectionError("Находка теневого прогона недоступна для действий врача")
+    return finding
+
+
 def _resolve_model_version_id(db: Session, finding: Finding) -> uuid.UUID | None:
     if finding.inference_result is not None:
         return finding.inference_result.model_version_id
@@ -51,9 +61,7 @@ def confirm_finding(
     Активное действие по одной находке (SR-2). Порождает correction — обучающий
     сигнал «модель была права».
     """
-    finding = db.get(Finding, finding_id)
-    if finding is None:
-        raise CorrectionError("Находка не найдена")
+    finding = _get_actionable(db, finding_id)
     if finding.confirmation_status == ConfirmationStatus.CONFIRMED:
         raise CorrectionError("Находка уже подтверждена")
 
@@ -91,9 +99,7 @@ def modify_finding(
     Правка — сильнейший обучающий сигнал: показывает, каким должен быть верный
     результат. После правки находка считается подтверждённой врачом.
     """
-    finding = db.get(Finding, finding_id)
-    if finding is None:
-        raise CorrectionError("Находка не найдена")
+    finding = _get_actionable(db, finding_id)
 
     before = _snapshot(finding)
     if new_measurements is not None:
@@ -133,9 +139,7 @@ def reject_finding(
     Обучающий сигнал «ложное срабатывание». Также питает контроль дрейфа
     (доля отклонений по срезам, FR-11).
     """
-    finding = db.get(Finding, finding_id)
-    if finding is None:
-        raise CorrectionError("Находка не найдена")
+    finding = _get_actionable(db, finding_id)
 
     before = _snapshot(finding)
     finding.confirmation_status = ConfirmationStatus.REJECTED

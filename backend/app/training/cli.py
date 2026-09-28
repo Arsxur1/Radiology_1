@@ -5,6 +5,7 @@
   2. freeze    — сформировать замороженный тест ДО обучения (FR-10 п. 4);
   3. train     — дообучить кандидата (отдельно для взрослых и детей);
   4. evaluate  — оценить на замороженном тесте (для гейта продвижения);
+  import-site  — метки врачей площадки (POST /learning/site-manifest) → манифест «ncmc»;
   5. зарегистрировать кандидата: POST /models/candidates с registration.json → SHADOW.
 
 Команда `labels` не трогает данные и доступна везде — для проверки маппинга меток.
@@ -19,16 +20,52 @@ from pathlib import Path
 
 from app.training.contour import ContourError, require_training_contour
 from app.training.label_map import map_labels
-from app.training.manifest import label_stats, read_jsonl, write_jsonl
+from app.training.manifest import ManifestRecord, label_stats, read_jsonl, write_jsonl
 from app.training.sources import DATASETS, SourceError, parse_dataset
 from app.training.splits import FrozenTestError, freeze_test_set, load_frozen, training_records
+
+SITE_DATASET = "ncmc"
+
+
+def import_site(data: dict) -> tuple[list[ManifestRecord], dict]:
+    """Проверить экспорт площадки: только коды словаря, известные популяции и сплиты."""
+    from app.services.finding_vocabulary import by_code
+
+    records, rejected = [], {"unknown_codes": set(), "bad_records": 0}
+    for raw in data.get("records", []):
+        try:
+            r = ManifestRecord(**raw)
+        except TypeError:
+            rejected["bad_records"] += 1
+            continue
+        if r.dataset != SITE_DATASET or r.population not in ("adult", "pediatric") \
+                or r.split not in ("train", "validate", "test"):
+            rejected["bad_records"] += 1
+            continue
+        unknown = {c for c in r.labels if by_code(c) is None}
+        rejected["unknown_codes"] |= unknown
+        r.labels = {c: v for c, v in r.labels.items() if c not in unknown and v in (0, 1, None)}
+        records.append(r)
+    rejected["unknown_codes"] = sorted(rejected["unknown_codes"])
+    return records, rejected
+
+
+def cmd_import_site(args) -> dict:
+    data = json.loads(Path(args.json).read_text("utf-8"))
+    records, rejected = import_site(data)
+    out = Path(args.out)
+    write_jsonl(records, out)
+    report = {"records": len(records), **rejected, "site_report": data.get("report", {}),
+              "label_stats": label_stats(records)}
+    out.with_suffix(".report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), "utf-8")
+    return {k: report[k] for k in ("records", "bad_records", "unknown_codes")}
 
 
 def _roots(pairs: list[str]) -> dict[str, str]:
     out: dict[str, str] = {}
     for pair in pairs or []:
         key, _, path = pair.partition("=")
-        if key not in DATASETS or not path:
+        if key not in (*DATASETS, SITE_DATASET) or not path:
             raise SystemExit(f"--root ожидает <датасет>=<путь>, получено {pair!r}")
         out[key] = path
     return out
@@ -122,6 +159,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--out", required=True)
     s.add_argument("--force", action="store_true")
     s.set_defaults(func=cmd_freeze, needs_contour=True)
+
+    s = sub.add_parser("import-site", help="экспорт меток площадки → манифест ncmc")
+    s.add_argument("--json", required=True, help="ответ POST /learning/site-manifest")
+    s.add_argument("--out", required=True)
+    s.set_defaults(func=cmd_import_site, needs_contour=True)
 
     for name, func in (("train", cmd_train), ("evaluate", cmd_evaluate)):
         s = sub.add_parser(name)

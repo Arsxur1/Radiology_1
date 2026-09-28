@@ -46,6 +46,22 @@ def export_training_set(
     return {"count": len(items), "items": [i.__dict__ for i in items]}
 
 
+@router.post("/site-manifest")
+def export_site_manifest(
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.RESEARCHER, Role.ADMIN)),
+) -> dict:
+    """Метки площадки из решений врачей в формате обучающего манифеста.
+
+    Сохраните ответ в файл и импортируйте на обучающем сервере:
+    `python -m app.training.cli import-site --json export.json --out work/ncmc.jsonl`.
+    """
+    from app.services.site_labels import site_manifest
+
+    records, report = site_manifest(db)
+    return {"report": report, "records": records}
+
+
 @router.get("/drift/rejection-rate")
 def rejection_rate(
     db: Session = Depends(get_db),

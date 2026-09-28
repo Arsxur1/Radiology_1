@@ -216,7 +216,35 @@ def test_card_and_registration(tmp_path):
         datasets=["mimic-cxr-jpg"], excluded_labels=["Pneumonia"], metrics={}, frozen_digest="d",
     )
     assert card["initial_status"] == "shadow"
-    assert set(registration_payload(card)) == {"name", "semver", "weights_hash", "applicability"}
+    reg = registration_payload(card)
+    assert set(reg) == {"name", "semver", "weights_hash", "applicability", "task", "operating_points"}
+    assert reg["task"] == "classification" and reg["operating_points"] == {}
+
+
+def test_youden_threshold():
+    from app.training.thresholds import operating_points, youden_threshold
+
+    op = youden_threshold([0, 0, 1, 1, None], [0.1, 0.3, 0.6, 0.9, 0.99])
+    assert op["threshold"] == 0.6 and op["sensitivity"] == 1.0 and op["specificity"] == 1.0
+    assert youden_threshold([1, 1], [0.2, 0.9]) is None          # один класс — нет точки
+    ops = operating_points(["A", "B"], [[1, 0], [0, 0]], [[0.8, 0.1], [0.2, 0.3]])
+    assert set(ops) == {"A"}                                      # у B нет позитивов
+
+
+def test_cli_import_site(tmp_path, monkeypatch):
+    monkeypatch.setenv("MEDVIZ_CONTOUR", "training")
+    good = {"dataset": "ncmc", "image_id": "s1", "image_path": "p/s1", "patient_key": "u1",
+            "split": "train", "population": "pediatric", "labels": {"CXR-200": 1, "CXR-XXX": 1, "CXR-000": 0},
+            "view": None, "boxes": []}
+    data = {"report": {"records": 3}, "records": [good, {**good, "dataset": "mimic-cxr-jpg"}, {"junk": 1}]}
+    src = tmp_path / "export.json"
+    src.write_text(json.dumps(data), "utf-8")
+    out = tmp_path / "work/ncmc.jsonl"
+    assert main(["import-site", "--json", str(src), "--out", str(out)]) == 0
+    recs = read_jsonl(out)
+    assert len(recs) == 1 and recs[0].labels == {"CXR-200": 1, "CXR-000": 0}
+    report = json.loads(out.with_suffix(".report.json").read_text("utf-8"))
+    assert report["bad_records"] == 2 and report["unknown_codes"] == ["CXR-XXX"]
 
 
 # ─── Сквозной CLI: манифест → заморозка ───────────────────────────────────────

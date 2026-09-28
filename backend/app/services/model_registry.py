@@ -27,9 +27,25 @@ from app.models.audit import AuditAction
 from app.models.ml import ModelStatus, ModelVersion
 from app.services import audit
 
+MODEL_TASKS = ("segmentation", "classification")
+
 
 class PromotionError(Exception):
     """Нарушение процедуры продвижения модели."""
+
+
+def _validate_operating_points(ops: dict) -> None:
+    """Классификатор без порогов не регистрируется: иначе нечем отсечь черновики."""
+    from app.services.finding_vocabulary import by_code
+
+    if not ops:
+        raise PromotionError("Для модели классификации нужны пороги operating_points")
+    for code, op in ops.items():
+        if by_code(code) is None:
+            raise PromotionError(f"Код {code!r} отсутствует в словаре находок")
+        t = op.get("threshold") if isinstance(op, dict) else None
+        if not isinstance(t, int | float) or not 0.0 < float(t) < 1.0:
+            raise PromotionError(f"Порог для {code} должен быть в (0, 1)")
 
 
 @dataclass
@@ -109,9 +125,17 @@ def register_candidate(
     weights_hash: str,
     applicability: dict,
     actor: str,
+    task: str = "segmentation",
+    operating_points: dict | None = None,
 ) -> ModelVersion:
     """Зарегистрировать модель-кандидата. Всегда стартует в SHADOW (раздел 2)."""
+    if task not in MODEL_TASKS:
+        raise PromotionError(f"Неизвестный тип модели {task!r}; допустимо: {', '.join(MODEL_TASKS)}")
+    if task == "classification":
+        _validate_operating_points(operating_points or {})
     candidate = ModelVersion(
+        task=task,
+        operating_points=operating_points or {},
         name=name,
         semver=semver,
         weights_hash=weights_hash,
@@ -128,7 +152,7 @@ def register_candidate(
         action=AuditAction.MODEL_PROMOTE,
         entity_type="model_version",
         entity_id=candidate.id,
-        details={"event": "register_candidate", "name": name, "semver": semver},
+        details={"event": "register_candidate", "name": name, "semver": semver, "task": task},
     )
     return candidate
 
@@ -225,3 +249,29 @@ def rollback(
                  "from": str(current.id) if current else None},
     )
     return target
+
+
+def models_for(
+    db: Session,
+    *,
+    task: str,
+    modality: str | None,
+    statuses: tuple[ModelStatus, ...] = (ModelStatus.ACTIVE,),
+) -> list[ModelVersion]:
+    """Модели заданного типа и статуса, заявленные для модальности серии.
+
+    Пустой список модальностей в applicability трактуется как «не ограничено»;
+    окончательное решение всё равно за гейтом применимости (SR-7).
+    """
+    rows = db.execute(
+        select(ModelVersion)
+        .where(ModelVersion.task == task, ModelVersion.status.in_(statuses))
+        .order_by(ModelVersion.name, ModelVersion.created_at)
+    ).scalars().all()
+    mod = (modality or "").strip().upper()
+    out = []
+    for m in rows:
+        allowed = [str(x).strip().upper() for x in (m.applicability or {}).get("modality", [])]
+        if not allowed or mod in allowed:
+            out.append(m)
+    return out

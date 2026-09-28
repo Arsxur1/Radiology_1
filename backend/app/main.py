@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     routes_audit,
+    routes_classification,
     routes_findings,
     routes_health,
     routes_learning,
@@ -54,6 +55,7 @@ app.include_router(routes_findings.router)
 app.include_router(routes_models.router)
 app.include_router(routes_learning.router)
 app.include_router(routes_segmentation.router)
+app.include_router(routes_classification.router)
 app.include_router(routes_temporal.router)
 app.include_router(routes_reports.router)
 app.include_router(routes_pacs.router)

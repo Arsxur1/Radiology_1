@@ -28,15 +28,25 @@ from app.training.model_card import (
     weights_sha256,
 )
 from app.training.splits import FrozenTest
+from app.training.thresholds import operating_points
 
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
 
 
 def load_grayscale(path: Path, size: int):  # pragma: no cover - нужны Pillow/numpy/pydicom
-    """Прочитать JPG или DICOM в нормализованное изображение size×size."""
+    """Прочитать JPG или DICOM в нормализованное изображение size×size.
+
+    Каталог серии (экспорт площадки) — берётся первый по имени DICOM-файл.
+    """
     import numpy as np
     from PIL import Image
+
+    if path.is_dir():
+        files = sorted(p for p in path.iterdir() if p.suffix.lower() in (".dcm", ".dicom"))
+        if not files:
+            raise FileNotFoundError(f"В каталоге серии нет DICOM: {path}")
+        path = files[0]
 
     if path.suffix.lower() in (".dicom", ".dcm"):
         import pydicom
@@ -171,13 +181,16 @@ def train(  # pragma: no cover - нужен torch и данные на обуч�
                         "val_mean_auroc": mean, "val_auroc": per_code})
         if best is None or (mean or 0) > (best["val_mean_auroc"] or 0):
             best = history[-1]
-            torch.save({"state_dict": model.state_dict(), "codes": codes}, weights_path)
+            # Пороги — по валидации лучшей эпохи; хранятся вместе с весами.
+            ops = operating_points(codes, truths, scores)
+            torch.save({"state_dict": model.state_dict(), "codes": codes,
+                        "image_size": image_size, "operating_points": ops}, weights_path)
 
     card = build_card(
         name=name, semver=semver, weights_hash=weights_sha256(weights_path),
         population=population, applicability=applicability, codes=codes,
         datasets=sorted({r.dataset for r in records}), excluded_labels=excluded_labels,
-        metrics=best, frozen_digest=frozen.digest,
+        metrics=best, frozen_digest=frozen.digest, operating_points=ops,
     )
     (out_dir / "model_card.json").write_text(json.dumps(card, ensure_ascii=False, indent=2), "utf-8")
     (out_dir / "registration.json").write_text(

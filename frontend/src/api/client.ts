@@ -13,6 +13,7 @@ import type {
   RegistrationOut,
   RegistrationStage,
   ReportOut,
+  ShadowReport,
   StudyOut,
   TemporalSeries,
 } from "./types";
@@ -110,11 +111,15 @@ export const api = {
     semver: string;
     weights_hash: string;
     applicability?: Record<string, unknown>;
+    task?: string;
+    operating_points?: Record<string, { threshold: number }>;
   }) =>
     request<ModelOut>("/models/candidates", {
       method: "POST",
       body: JSON.stringify({ applicability: {}, ...payload }),
     }),
+
+  shadowReport: (versionId: string) => request<ShadowReport>(`/models/${versionId}/shadow-report`),
 
   evaluateModel: (candidateId: string, evidence: PromotionEvidence) =>
     request<PromotionGateResult>(`/models/${candidateId}/evaluate`, {

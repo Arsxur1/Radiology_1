@@ -34,6 +34,8 @@ class ModelOut(BaseModel):
     weights_hash: str
     status: str
     applicability: dict
+    task: str
+    operating_points: dict
 
 
 class RegisterIn(BaseModel):
@@ -41,6 +43,8 @@ class RegisterIn(BaseModel):
     semver: str
     weights_hash: str
     applicability: dict = {}
+    task: str = "segmentation"
+    operating_points: dict = {}
 
 
 class PromotionEvidenceIn(BaseModel):
@@ -64,6 +68,7 @@ def _out(m: ModelVersion) -> ModelOut:
     return ModelOut(
         id=m.id, name=m.name, semver=m.semver, weights_hash=m.weights_hash,
         status=m.status.value, applicability=m.applicability,
+        task=m.task, operating_points=m.operating_points or {},
     )
 
 
@@ -79,10 +84,14 @@ def register_candidate(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(require_roles(Role.ADMIN)),
 ) -> ModelOut:
-    m = model_registry.register_candidate(
-        db, name=payload.name, semver=payload.semver, weights_hash=payload.weights_hash,
-        applicability=payload.applicability, actor=user.subject,
-    )
+    try:
+        m = model_registry.register_candidate(
+            db, name=payload.name, semver=payload.semver, weights_hash=payload.weights_hash,
+            applicability=payload.applicability, actor=user.subject,
+            task=payload.task, operating_points=payload.operating_points,
+        )
+    except PromotionError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     db.commit()
     return _out(m)
 
@@ -107,6 +116,21 @@ def evaluate(
         criteria=PromotionCriteria(),
     )
     return {"ok": gate.ok, "reasons": gate.reasons}
+
+
+@router.get("/{version_id}/shadow-report")
+def shadow_report(
+    version_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.ADMIN)),
+) -> dict:
+    """Теневой прогон против подписанных заключений: данные для гейта (шаг 5)."""
+    from app.services.shadow_eval import shadow_report as build
+
+    try:
+        return build(db, version_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.post("/{candidate_id}/promote", response_model=ModelOut)

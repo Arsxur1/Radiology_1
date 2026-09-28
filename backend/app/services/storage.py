@@ -35,3 +35,22 @@ def put_object(bucket: str, key: str, data: bytes, content_type: str = "applicat
     client = get_minio()
     client.put_object(bucket, key, io.BytesIO(data), length=len(data), content_type=content_type)
     return f"{bucket}/{key}"
+
+
+def first_series_object(series_object_prefix: str) -> bytes:
+    """Первый по имени DICOM-объект серии (для рентгена серия — обычно один снимок)."""
+    s = get_settings()
+    client = get_minio()
+    keys = sorted(
+        o.object_name
+        for o in client.list_objects(s.bucket_images, prefix=f"{series_object_prefix}/", recursive=True)
+        if o.object_name.endswith(".dcm")
+    )
+    if not keys:
+        raise FileNotFoundError(f"Нет объектов серии {series_object_prefix}")
+    resp = client.get_object(s.bucket_images, keys[0])
+    try:
+        return resp.read()
+    finally:
+        resp.close()
+        resp.release_conn()

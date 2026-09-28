@@ -7,7 +7,48 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
-import type { ModeOut, ModelOut, OperatingMode, PromotionEvidence, PromotionGateResult } from "../api/types";
+import type {
+  ModeOut,
+  ModelOut,
+  OperatingMode,
+  PromotionEvidence,
+  PromotionGateResult,
+  ShadowReport,
+} from "../api/types";
+
+const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1)}%`);
+
+function ShadowReportView({ report }: { report: ShadowReport }) {
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div>
+        Теневых прогонов: {report.shadow_runs}, с подписанным заключением: {report.reviewed_cases}. Расхождение
+        (черновик, не включённый врачом): <strong>{pct(report.disagreement_rate)}</strong>, пропуски:{" "}
+        <strong>{pct(report.miss_rate)}</strong>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Аппарат</th>
+            <th>Случаев</th>
+            <th>Расхождение</th>
+            <th>Пропуски</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(report.per_manufacturer).map(([m, v]) => (
+            <tr key={m}>
+              <td>{m}</td>
+              <td>{v.cases}</td>
+              <td>{pct(v.disagreement_rate)}</td>
+              <td>{pct(v.miss_rate)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 const MODES: OperatingMode[] = ["RESEARCH", "SHADOW", "ASSIST"];
 
@@ -93,6 +134,7 @@ const EMPTY_EVIDENCE: PromotionEvidence = {
 function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void }) {
   const [ev, setEv] = useState<PromotionEvidence>(EMPTY_EVIDENCE);
   const [gate, setGate] = useState<PromotionGateResult | null>(null);
+  const [shadow, setShadow] = useState<ShadowReport | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   async function guard<T>(fn: () => Promise<T>) {
@@ -115,7 +157,12 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
           {model.status}
         </span>
       </div>
-      <div className="muted">весы: {model.weights_hash}</div>
+      <div className="muted">
+        {model.task === "classification"
+          ? `классификация находок: ${Object.keys(model.operating_points).length} кодов с порогами`
+          : "сегментация"}
+        {" · "}весы: {model.weights_hash}
+      </div>
 
       {model.status === "shadow" && (
         <div style={{ marginTop: 8 }}>
@@ -159,6 +206,18 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
             </label>
           </div>
           <div className="row" style={{ marginTop: 8 }}>
+            <button
+              onClick={() =>
+                guard(async () => {
+                  const r = await api.shadowReport(model.id);
+                  setShadow(r);
+                  // Доля расхождений с подписанными заключениями — оценка доли отклонений.
+                  setEv((cur) => ({ ...cur, shadow_rejection_rate: r.disagreement_rate }));
+                })
+              }
+            >
+              Сравнить с заключениями
+            </button>
             <button onClick={() => guard(async () => setGate(await api.evaluateModel(model.id, ev)))}>
               Проверить готовность
             </button>
@@ -176,6 +235,7 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
               Продвинуть в ASSIST
             </button>
           </div>
+          {shadow && <ShadowReportView report={shadow} />}
           {gate && (
             <div style={{ marginTop: 6 }} className={gate.ok ? "" : "error"}>
               {gate.ok ? "Готов к продвижению ✓" : "Нельзя продвинуть:"}
@@ -215,6 +275,7 @@ function ModelsSection() {
   const [models, setModels] = useState<ModelOut[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", semver: "0.1.0", weights_hash: "" });
+  const [regJson, setRegJson] = useState("");
 
   const reload = () => api.listModels().then(setModels).catch((e) => setErr(String(e)));
   useEffect(() => {
@@ -224,8 +285,10 @@ function ModelsSection() {
   async function register() {
     setErr(null);
     try {
-      await api.registerCandidate(form);
+      // registration.json из обучающего контура (тип, пороги, границы применимости) либо ручной ввод.
+      await api.registerCandidate(regJson.trim() ? JSON.parse(regJson) : form);
       setForm({ name: "", semver: "0.1.0", weights_hash: "" });
+      setRegJson("");
       reload();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : String(e));
@@ -246,10 +309,17 @@ function ModelsSection() {
             value={form.weights_hash}
             onChange={(e) => setForm({ ...form, weights_hash: e.target.value })}
           />
-          <button onClick={register} disabled={!form.name || !form.weights_hash}>
+          <button onClick={register} disabled={!regJson.trim() && (!form.name || !form.weights_hash)}>
             Зарегистрировать
           </button>
         </div>
+        <textarea
+          placeholder="…или вставьте registration.json из обучающего контура"
+          rows={4}
+          style={{ width: "100%", marginTop: 8 }}
+          value={regJson}
+          onChange={(e) => setRegJson(e.target.value)}
+        />
       </div>
       {models.map((m) => (
         <ModelRow key={m.id} model={m} onChanged={reload} />

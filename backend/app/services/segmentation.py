@@ -25,6 +25,7 @@ from app.models.ml import (
     Finding,
     FindingSource,
     InferenceResult,
+    ModelStatus,
     ModelVersion,
 )
 from app.services.applicability import SeriesContext, check_applicability
@@ -122,6 +123,7 @@ def segment_series(
         artifact_ref=output.mask_artifact_ref,
         preprocessing_params=output.preprocessing_params,
         metrics=output.extra_metrics,
+        shadow_run=model_version.status == ModelStatus.SHADOW,
     )
     db.add(inference)
     db.flush()

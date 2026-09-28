@@ -10,8 +10,8 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
@@ -53,6 +53,10 @@ class ModelVersion(UUIDMixin, TimestampMixin, Base):
     status: Mapped[ModelStatus] = mapped_column(
         SAEnum(ModelStatus, name="model_status"), default=ModelStatus.SHADOW, nullable=False
     )
+    # Тип модели: segmentation (структуры + измерения) | classification (находки ОГК).
+    task: Mapped[str] = mapped_column(String(32), default="segmentation", nullable=False)
+    # Пороги по кодам находок, подобранные на валидации: {"CXR-200": {"threshold": 0.4}}.
+    operating_points: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
 
 class InferenceResult(UUIDMixin, TimestampMixin, Base):
@@ -69,6 +73,9 @@ class InferenceResult(UUIDMixin, TimestampMixin, Base):
     execution_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     preprocessing_params: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # Теневой прогон (FR-10 п. 5): модель в SHADOW, результаты врачу не показываются
+    # никогда — даже после продвижения модели.
+    shadow_run: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     model_version: Mapped[ModelVersion] = relationship()
     findings: Mapped[list[Finding]] = relationship(back_populates="inference_result")

@@ -25,6 +25,10 @@ class FindingConcept:
     note: str | None = None
 
 
+# Кодовая система локального словаря (в finding.coding_system).
+CODING_SYSTEM = "MEDVIZ-CXR"
+
+
 # Общий набор находок ОГК (расширяемый). Порядок — по группам.
 CHEST_FINDINGS: tuple[FindingConcept, ...] = (
     # Норма
