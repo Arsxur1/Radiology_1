@@ -13,6 +13,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db.migration_utils import has_column
 from app.db.types import JSONB
 
 revision = "0006"
@@ -22,18 +23,21 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "model_version",
-        sa.Column("task", sa.String(32), nullable=False, server_default="segmentation"),
-    )
-    op.add_column(
-        "model_version",
-        sa.Column("operating_points", JSONB, nullable=False, server_default="{}"),
-    )
-    op.add_column(
-        "inference_result",
-        sa.Column("shadow_run", sa.Boolean(), nullable=False, server_default=sa.false()),
-    )
+    if not has_column("model_version", "task"):
+        op.add_column(
+            "model_version",
+            sa.Column("task", sa.String(32), nullable=False, server_default="segmentation"),
+        )
+    if not has_column("model_version", "operating_points"):
+        op.add_column(
+            "model_version",
+            sa.Column("operating_points", JSONB, nullable=False, server_default="{}"),
+        )
+    if not has_column("inference_result", "shadow_run"):
+        op.add_column(
+            "inference_result",
+            sa.Column("shadow_run", sa.Boolean(), nullable=False, server_default=sa.false()),
+        )
 
 
 def downgrade() -> None:

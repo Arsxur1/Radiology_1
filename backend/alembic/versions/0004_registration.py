@@ -9,6 +9,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db.migration_utils import has_table
 from app.db.types import GUID, JSONB
 
 revision = "0004"
@@ -18,6 +19,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if has_table("registration"):
+        return  # создано начальной миграцией из текущих моделей
     op.create_table(
         "registration",
         sa.Column("id", GUID(), primary_key=True),

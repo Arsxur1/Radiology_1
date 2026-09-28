@@ -23,6 +23,47 @@ jobs:
       - name: Tests (включая интеграционные и приёмочные)
         run: pytest -q
 
+  # Миграции на настоящей PostgreSQL: подъём с нуля, полный откат, повторный подъём,
+  # затем демо-данные и сводная панель (портируемость запросов вне SQLite).
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: medviz
+          POSTGRES_PASSWORD: medviz
+          POSTGRES_DB: medviz
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U medviz" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: medviz
+      POSTGRES_PASSWORD: medviz
+      POSTGRES_DB: medviz
+      PYTHONPATH: .
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: upgrade → downgrade → upgrade
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+      - name: Демо-данные и сводная панель на PostgreSQL
+        run: |
+          python scripts/seed_demo.py
+          python -c "from app.db.session import SessionLocal; from app.services.pilot_dashboard import build_dashboard; d = build_dashboard(SessionLocal()); assert d['totals']['studies'] == 3, d['totals']; print(d['totals'])"
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

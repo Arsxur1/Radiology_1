@@ -12,6 +12,7 @@ from __future__ import annotations
 import sqlalchemy as sa
 
 from alembic import op
+from app.db.migration_utils import has_column
 
 revision = "0005"
 down_revision = "0004"
@@ -20,6 +21,8 @@ depends_on = None
 
 
 def upgrade() -> None:
+    if has_column("study", "patient_age_years"):
+        return
     op.add_column("study", sa.Column("patient_age_years", sa.Float(), nullable=True))
 
 

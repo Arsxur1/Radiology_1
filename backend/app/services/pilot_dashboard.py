@@ -69,7 +69,10 @@ def build_dashboard(db: Session, *, weeks: int = 12, now: datetime | None = None
     visible_model = (
         select(Finding.confirmation_status, func.count())
         .join(InferenceResult, Finding.inference_result_id == InferenceResult.id)
-        .where(Finding.source == FindingSource.MODEL, InferenceResult.shadow_run.is_(False))
+        .join(ModelVersion, InferenceResult.model_version_id == ModelVersion.id)
+        # Только находки классификатора: структуры сегментации — не «черновики находок».
+        .where(Finding.source == FindingSource.MODEL, InferenceResult.shadow_run.is_(False),
+               ModelVersion.task == "classification")
         .group_by(Finding.confirmation_status)
     )
     drafts = {s.value: n for s, n in db.execute(visible_model).all()}
