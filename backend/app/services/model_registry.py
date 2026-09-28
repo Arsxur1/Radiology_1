@@ -142,8 +142,8 @@ def register_candidate(
             if adapter.get("weights") not in XRV_WEIGHTS:
                 raise PromotionError(f"Неизвестные веса xrv: {adapter.get('weights')!r}")
         elif kind == "totalsegmentator" and task == "segmentation":
-            if adapter.get("task", "total") != "total":
-                raise PromotionError("Поддерживается только открытая задача TotalSegmentator «total»")
+            if adapter.get("task", "total") not in ("total", "total_mr"):
+                raise PromotionError("Поддерживаются открытые задачи TotalSegmentator: total (КТ), total_mr (МРТ)")
         else:
             raise PromotionError("Адаптер: xrv — для классификации, totalsegmentator — для сегментации")
     if task not in MODEL_TASKS:

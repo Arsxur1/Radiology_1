@@ -44,6 +44,8 @@ def test_adapter_validation(db):
     kw = dict(name="ts", semver="2.0.0", weights_hash="h", applicability={}, actor="a")
     mv = register_candidate(db, task="segmentation", adapter={"type": "totalsegmentator", "task": "total"}, **kw)
     assert mv.status == ModelStatus.SHADOW
+    mr = register_candidate(db, task="segmentation", adapter={"type": "totalsegmentator", "task": "total_mr"}, **kw)
+    assert mr.adapter["task"] == "total_mr"
     with pytest.raises(PromotionError):
         register_candidate(db, task="classification", adapter={"type": "totalsegmentator"}, **kw)
     with pytest.raises(PromotionError):

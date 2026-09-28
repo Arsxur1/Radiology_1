@@ -83,7 +83,7 @@ def load_segmentation_model(model_version: ModelVersion, series: Series):
 
         adapter = model_version.adapter or {}
         return TotalSegmentatorAdapter(model_version.weights_hash, keys, storage.series_objects, store_mask,
-                                       fast=bool(adapter.get("fast", True)))
+                                       fast=bool(adapter.get("fast", True)), task=adapter.get("task", "total"))
     except (ImportError, OSError, RuntimeError) as e:
         raise SegmentationUnavailable(f"{model_version.name}@{model_version.semver}: {e}") from e
 

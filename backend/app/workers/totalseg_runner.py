@@ -18,11 +18,12 @@ def main() -> None:  # pragma: no cover - нужен TotalSegmentator
     p.add_argument("output")
     p.add_argument("--full", action="store_true")
     p.add_argument("--device", default="cpu")
+    p.add_argument("--task", default="total", choices=["total", "total_mr"])
     a = p.parse_args()
 
     from totalsegmentator.python_api import totalsegmentator
 
-    totalsegmentator(a.input, a.output, ml=True, fast=not a.full, device=a.device, quiet=True)
+    totalsegmentator(a.input, a.output, ml=True, fast=not a.full, task=a.task, device=a.device, quiet=True)
 
 
 if __name__ == "__main__":
