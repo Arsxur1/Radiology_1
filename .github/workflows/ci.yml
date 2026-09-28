@@ -80,3 +80,26 @@ jobs:
         run: npm ci
       - name: Build (строгий tsc + vite)
         run: npm run build
+
+  # Сборка образов развёртывания (как на сервере клиники): backend и шлюз web.
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Образ backend
+        run: docker build -t medviz-backend ./backend
+      - name: Образ web (интерфейс врача + nginx-шлюз)
+        run: docker build -t medviz-web ./frontend
+      - name: Шлюз стартует с шаблоном и подстановкой пароля Orthanc
+        run: |
+          docker run -d --name web -e ORTHANC_USERNAME=u -e ORTHANC_PASSWORD=p \
+            --add-host backend:127.0.0.1 --add-host orthanc-clean:127.0.0.1 \
+            -v "$PWD/infra/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro" \
+            -v "$PWD/infra/nginx/15-orthanc-auth.envsh:/docker-entrypoint.d/15-orthanc-auth.envsh:ro" \
+            -p 8080:80 medviz-web
+          sleep 3
+          docker exec web grep -q "Basic dTpw" /etc/nginx/conf.d/default.conf
+          curl -sf http://localhost:8080/ | grep -q '<div id="root">'
+          curl -sf http://localhost:8080/studies/x | grep -q '<div id="root">'
+      - name: Сервисы backend импортируются в образе
+        run: docker run --rm -e PYTHONPATH=/app medviz-backend python -c "import app.main, app.workers.orthanc_watcher, app.workers.classification_tasks; print('ok')"
