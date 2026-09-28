@@ -21,6 +21,10 @@ export interface StudyOut {
   description: string | null;
   manufacturer: string | null;
   series: SeriesOut[];
+  study_date: string | null;
+  patient_age_years: number | null;
+  ai_pending: number;
+  report_status: "none" | "draft" | "signed";
 }
 
 export type FindingSource = "model" | "physician";

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
@@ -36,6 +37,12 @@ class StudyOut(BaseModel):
     description: str | None
     manufacturer: str | None
     series: list[SeriesOut]
+    study_date: datetime | None = None
+    patient_age_years: float | None = None
+    # Черновики находок ИИ, ожидающие решения врача (видимые в текущем режиме).
+    ai_pending: int = 0
+    # none — заключения нет; draft — черновик; signed — подписано.
+    report_status: str = "none"
 
 
 @router.get("", response_model=list[StudyOut])
@@ -51,7 +58,8 @@ def list_studies(
     if patient_id:
         stmt = stmt.where(Study.patient_id == patient_id)
     studies = db.execute(stmt).scalars().all()
-    return [_to_study_out(s) for s in studies]
+    pending, reports = _worklist_status(db, [s.id for s in studies])
+    return [_to_study_out(s, pending.get(s.id, 0), reports.get(s.id, "none")) for s in studies]
 
 
 @router.get("/{study_id}", response_model=StudyOut)
@@ -59,11 +67,55 @@ def get_study(study_id: uuid.UUID, db: Session = Depends(get_db)) -> StudyOut:
     study = db.get(Study, study_id)
     if study is None:
         raise HTTPException(status_code=404, detail="Исследование не найдено")
-    return _to_study_out(study)
+    pending, reports = _worklist_status(db, [study.id])
+    return _to_study_out(study, pending.get(study.id, 0), reports.get(study.id, "none"))
 
 
-def _to_study_out(study: Study) -> StudyOut:
+def _worklist_status(db: Session, study_ids: list[uuid.UUID]) -> tuple[dict, dict]:
+    """Сколько черновиков классификатора ждут решения и статус заключения — по исследованиям."""
+    from sqlalchemy import func
+
+    from app.models.ml import ConfirmationStatus, Finding, FindingSource, InferenceResult, ModelVersion, Report
+    from app.services.mode_state import model_results_visible
+
+    if not study_ids:
+        return {}, {}
+    rows = db.execute(
+        select(Series.study_id, Series.modality, func.count())
+        .join(Finding, Finding.series_id == Series.id)
+        .join(InferenceResult, Finding.inference_result_id == InferenceResult.id)
+        .join(ModelVersion, InferenceResult.model_version_id == ModelVersion.id)
+        .where(
+            Series.study_id.in_(study_ids),
+            ModelVersion.task == "classification",
+            Finding.source == FindingSource.MODEL,
+            Finding.confirmation_status == ConfirmationStatus.PENDING,
+            InferenceResult.shadow_run.is_(False),
+        )
+        .group_by(Series.study_id, Series.modality)
+    ).all()
+    visible: dict[str | None, bool] = {}
+    pending: dict = {}
+    for study_id, modality, n in rows:
+        if modality not in visible:
+            visible[modality] = model_results_visible(db, modality)
+        if visible[modality]:
+            pending[study_id] = pending.get(study_id, 0) + n
+    reports = {
+        sid: ("signed" if fin else "draft")
+        for sid, fin in db.execute(
+            select(Report.study_id, Report.finalized_by).where(Report.study_id.in_(study_ids))
+        ).all()
+    }
+    return pending, reports
+
+
+def _to_study_out(study: Study, ai_pending: int = 0, report_status: str = "none") -> StudyOut:
     return StudyOut(
+        study_date=study.study_date,
+        patient_age_years=study.patient_age_years,
+        ai_pending=ai_pending,
+        report_status=report_status,
         id=study.id,
         patient_id=study.patient_id,
         study_instance_uid=study.study_instance_uid,

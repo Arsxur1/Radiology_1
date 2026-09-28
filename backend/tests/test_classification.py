@@ -302,3 +302,20 @@ def test_finalize_requires_decisions_and_fresh_draft(db):
     report_repo.finalize_report(db, report_id=report.id, physician="dr")
     with pytest.raises(ReportConflict):
         report_repo.generate_report_draft(db, study_id=series.study_id)       # подписанное не меняется
+
+
+def test_worklist_status(db):
+    from app.api.routes_studies import list_studies
+    from app.services import report_repo
+
+    series, mv = _series(db), _model(db)
+    out = classification.classify_series(db, series=series, model_version=mv, model=FixedModel(PROBS))
+    shadow = _model(db, status=ModelStatus.SHADOW, name="next")
+    classification.classify_series(db, series=series, model_version=shadow, model=FixedModel(PROBS))
+    row = list_studies(db=db)[0]
+    assert (row.ai_pending, row.report_status, row.patient_age_years) == (1, "none", 5.0)   # теневые не считаются
+    corrections.confirm_finding(db, finding_id=out.finding_ids[0], physician="dr")
+    report = report_repo.generate_report_draft(db, study_id=series.study_id)
+    assert (list_studies(db=db)[0].ai_pending, list_studies(db=db)[0].report_status) == (0, "draft")
+    report_repo.finalize_report(db, report_id=report.id, physician="dr")
+    assert list_studies(db=db)[0].report_status == "signed"
