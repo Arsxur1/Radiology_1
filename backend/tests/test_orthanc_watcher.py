@@ -50,3 +50,21 @@ def test_cursor_not_advanced_when_dispatch_fails():
     except RuntimeError:
         pass
     assert cursor.value == 0                                      # снимок не потерян
+
+
+def test_raw_source_dropped_after_ingest_only_when_enabled():
+    from app.workers.tasks import _drop_raw
+
+    class Raw:
+        def __init__(self, fail=False):
+            self.deleted, self.fail = [], fail
+
+        def delete_instance(self, iid):
+            if self.fail:
+                raise RuntimeError("orthanc недоступен")
+            self.deleted.append(iid)
+
+    r = Raw()
+    assert _drop_raw(r, "i1", True) and r.deleted == ["i1"]
+    assert not _drop_raw(r, "i2", False) and r.deleted == ["i1"]
+    assert not _drop_raw(Raw(fail=True), "i3", True)          # ошибка удаления не ломает приём

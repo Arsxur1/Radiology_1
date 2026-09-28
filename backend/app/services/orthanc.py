@@ -38,6 +38,11 @@ class OrthancClient:
         r.raise_for_status()
         return r.json()
 
+    def delete_instance(self, instance_id: str) -> None:
+        r = self._client.delete(f"/instances/{instance_id}")
+        if r.status_code != 404:  # уже удалён — не ошибка
+            r.raise_for_status()
+
     def series_preview_png(self, series_instance_uid: str) -> bytes | None:
         """PNG-превью первого снимка серии (рендер Orthanc, с его оконными настройками)."""
         r = self._client.post("/tools/lookup", content=series_instance_uid)

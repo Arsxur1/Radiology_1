@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     celery_result_backend: str = Field("redis://redis:6379/2", alias="CELERY_RESULT_BACKEND")
 
     # Приём
+    # Удалять исходник с PHI из orthanc-raw после успешного обезличивания (минимизация
+    # данных, SR-9). Оригинал остаётся в PACS клиники — источник истины там.
+    raw_delete_after_ingest: bool = Field(True, alias="RAW_DELETE_AFTER_INGEST")
     ingest_watch_dir: str = Field("/data/ingest", alias="INGEST_WATCH_DIR")
 
     # Аутентификация OIDC (Keycloak)

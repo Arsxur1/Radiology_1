@@ -16,6 +16,22 @@ from app.workers.dicom_meta import extract_series_meta, extract_study_meta
 logger = logging.getLogger(__name__)
 
 
+def _drop_raw(raw, raw_instance_id: str, enabled: bool) -> bool:
+    """Удалить исходник с PHI из orthanc-raw после фиксации результата в БД.
+
+    Ошибка удаления не ломает приём: снимок уже обезличен и сохранён; остаток
+    уберёт повторный прогон или администратор.
+    """
+    if not enabled:
+        return False
+    try:
+        raw.delete_instance(raw_instance_id)
+        return True
+    except Exception:  # noqa: BLE001
+        logger.warning("Не удалось удалить исходник %s из orthanc-raw", raw_instance_id, exc_info=True)
+        return False
+
+
 @celery_app.task(name="ingest.process_raw_instance", bind=True, max_retries=3)
 def process_raw_instance(self, raw_instance_id: str) -> dict:
     """Обработать один инстанс из raw-Orthanc: обезличить и зеркалировать.
@@ -55,6 +71,7 @@ def process_raw_instance(self, raw_instance_id: str) -> dict:
                 db, idmap, plan=plan, study_meta=study_meta, series_meta=series_meta
             )
             db.commit()
+            _drop_raw(raw, raw_instance_id, settings.raw_delete_after_ingest)
             # Автоанализ после приёма (FR-3): сегментация и классификация находок.
             # No-op, если для модальности нет подходящей модели.
             if not outcome.duplicate:

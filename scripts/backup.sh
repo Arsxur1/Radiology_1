@@ -17,6 +17,10 @@ docker compose exec -T postgres-idmap pg_dump -U "${IDMAP_POSTGRES_USER:-medviz_
 
 echo "→ Бэкап объектов MinIO"
 docker compose exec -T minio sh -c 'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; mc mirror --overwrite local/ /tmp/minio-backup' || true
-docker compose cp minio:/tmp/minio-backup "$DEST/minio" 2>/dev/null || true
+docker compose cp minio:/tmp/minio-backup "$DEST/minio" 2>/dev/null \
+  || echo "ВНИМАНИЕ: объекты S3 не скопированы — проверьте хранилище вручную" >&2
+
+echo "→ Веса моделей (models/)"
+if [ -d models ]; then cp -r models "$DEST/models"; fi
 
 echo "Готово: $DEST"
