@@ -124,6 +124,8 @@ function ShadowReportView({ report }: { report: ShadowReport }) {
   );
 }
 
+const MODES: OperatingMode[] = ["RESEARCH", "SHADOW", "ASSIST"];
+
 function ModesSection() {
   const [modes, setModes] = useState<ModeOut[]>([]);
   const [modality, setModality] = useState("*");
