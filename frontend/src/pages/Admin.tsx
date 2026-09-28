@@ -83,27 +83,22 @@ function CalibrationView({ model, onChanged }: { model: ModelOut; onChanged: () 
   );
 }
 
-function ShadowReportView({ report }: { report: ShadowReport }) {
+function SliceTable({ title, rows }: { title: string; rows: ShadowReport["per_manufacturer"] }) {
   return (
-    <div style={{ marginTop: 6 }}>
-      <div>
-        Теневых прогонов: {report.shadow_runs}, с подписанным заключением: {report.reviewed_cases}. Расхождение
-        (черновик, не включённый врачом): <strong>{pct(report.disagreement_rate)}</strong>, пропуски:{" "}
-        <strong>{pct(report.miss_rate)}</strong>
-      </div>
+    <div className="table-scroll">
       <table>
         <thead>
           <tr>
-            <th>Аппарат</th>
+            <th>{title}</th>
             <th>Случаев</th>
             <th>Расхождение</th>
             <th>Пропуски</th>
           </tr>
         </thead>
         <tbody>
-          {Object.entries(report.per_manufacturer).map(([m, v]) => (
-            <tr key={m}>
-              <td>{m}</td>
+          {Object.entries(rows).map(([k, v]) => (
+            <tr key={k}>
+              <td>{k}</td>
               <td>{v.cases}</td>
               <td>{pct(v.disagreement_rate)}</td>
               <td>{pct(v.miss_rate)}</td>
@@ -115,7 +110,19 @@ function ShadowReportView({ report }: { report: ShadowReport }) {
   );
 }
 
-const MODES: OperatingMode[] = ["RESEARCH", "SHADOW", "ASSIST"];
+function ShadowReportView({ report }: { report: ShadowReport }) {
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div>
+        Теневых прогонов: {report.shadow_runs}, с подписанным заключением: {report.reviewed_cases}. Расхождение
+        (черновик, не включённый врачом): <strong>{pct(report.disagreement_rate)}</strong>, пропуски:{" "}
+        <strong>{pct(report.miss_rate)}</strong>
+      </div>
+      <SliceTable title="Возраст" rows={report.per_age_group} />
+      <SliceTable title="Аппарат" rows={report.per_manufacturer} />
+    </div>
+  );
+}
 
 function ModesSection() {
   const [modes, setModes] = useState<ModeOut[]>([]);

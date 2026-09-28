@@ -20,12 +20,29 @@ from app.models.imaging import Series, Study
 from app.models.ml import InferenceResult, ModelVersion
 from app.services.site_labels import NORMAL_CODE, finalized_study_ids, series_truth
 
+AGE_GROUPS = ((0, 1, "0–1 год"), (1, 5, "1–5 лет"), (5, 12, "5–12 лет"), (12, 18, "12–18 лет"),
+              (18, 200, "взрослые"))
+
+
+def age_group(age: float | None) -> str:
+    if age is None:
+        return "возраст неизвестен"
+    for lo, hi, label in AGE_GROUPS:
+        if lo <= age < hi:
+            return label
+    return "возраст неизвестен"
+
 
 def _rates(c: dict) -> dict:
     tp, fp, fn = c["tp"], c["fp"], c["fn"]
     c["sensitivity"] = tp / (tp + fn) if tp + fn else None
     c["ppv"] = tp / (tp + fp) if tp + fp else None
     return c
+
+
+def _slice(v: dict) -> dict:
+    return {**v, "disagreement_rate": v["fp"] / (v["tp"] + v["fp"]) if v["tp"] + v["fp"] else None,
+            "miss_rate": v["fn"] / (v["tp"] + v["fn"]) if v["tp"] + v["fn"] else None}
 
 
 def shadow_report(db: Session, model_version_id: uuid.UUID) -> dict:
@@ -44,6 +61,7 @@ def shadow_report(db: Session, model_version_id: uuid.UUID) -> dict:
 
     per_code = {c: {"tp": 0, "fp": 0, "fn": 0, "tn": 0} for c in codes}
     per_device: dict[str, dict] = {}
+    per_age: dict[str, dict] = {}
     seen: set = set()
     total = {"tp": 0, "fp": 0, "fn": 0}
     shadow_runs = len(rows)
@@ -55,6 +73,8 @@ def shadow_report(db: Session, model_version_id: uuid.UUID) -> dict:
         drafted = set((inference.metrics or {}).get("drafted", []))
         dev = per_device.setdefault(study.manufacturer or "неизвестно", {"cases": 0, "tp": 0, "fp": 0, "fn": 0})
         dev["cases"] += 1
+        grp = per_age.setdefault(age_group(study.patient_age_years), {"cases": 0, "tp": 0, "fp": 0, "fn": 0})
+        grp["cases"] += 1
         for c in codes:
             pred, real = c in drafted, c in truth.positives
             key = "tp" if pred and real else "fp" if pred else "fn" if real else "tn"
@@ -62,6 +82,7 @@ def shadow_report(db: Session, model_version_id: uuid.UUID) -> dict:
             if key != "tn":
                 total[key] += 1
                 dev[key] += 1
+                grp[key] += 1
 
     tp, fp, fn = total["tp"], total["fp"], total["fn"]
     return {
@@ -72,9 +93,8 @@ def shadow_report(db: Session, model_version_id: uuid.UUID) -> dict:
         "disagreement_rate": fp / (tp + fp) if tp + fp else None,
         "miss_rate": fn / (tp + fn) if tp + fn else None,
         "per_code": {c: _rates(v) for c, v in per_code.items()},
-        "per_manufacturer": {
-            m: {**v, "disagreement_rate": v["fp"] / (v["tp"] + v["fp"]) if v["tp"] + v["fp"] else None,
-                "miss_rate": v["fn"] / (v["tp"] + v["fn"]) if v["tp"] + v["fn"] else None}
-            for m, v in sorted(per_device.items())
-        },
+        "per_manufacturer": {m: _slice(v) for m, v in sorted(per_device.items())},
+        # Переносимость на детей: взрослые модели на педиатрии проверяются здесь (раздел 9).
+        "per_age_group": {g: _slice(per_age[g]) for _, _, g in (*AGE_GROUPS, (0, 0, "возраст неизвестен"))
+                          if g in per_age},
     }

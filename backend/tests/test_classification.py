@@ -319,3 +319,18 @@ def test_worklist_status(db):
     assert (list_studies(db=db)[0].ai_pending, list_studies(db=db)[0].report_status) == (0, "draft")
     report_repo.finalize_report(db, report_id=report.id, physician="dr")
     assert list_studies(db=db)[0].report_status == "signed"
+
+
+def test_shadow_report_by_age_group(db):
+    mv = _model(db, status=ModelStatus.SHADOW)
+    mv.applicability = {**PEDS, "age": {"min_years": 0}}
+    db.flush()
+    for uid, age in (("k1", 0.5), ("k2", 3.0), ("a1", 40.0)):
+        s = _series(db, uid=uid, age=age)
+        classification.classify_series(db, series=s, model_version=mv, model=FixedModel(PROBS))  # CXR-200
+        if uid == "a1":
+            corrections.create_physician_finding(db, series_id=s.id, physician="dr", measurements={}, code="CXR-200")
+        _finalize(db, s)
+    rep = shadow_report(db, mv.id)["per_age_group"]
+    assert list(rep) == ["0–1 год", "1–5 лет", "взрослые"]
+    assert rep["взрослые"]["disagreement_rate"] == 0.0 and rep["1–5 лет"]["disagreement_rate"] == 1.0

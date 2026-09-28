@@ -98,6 +98,10 @@ export interface ShadowReport {
     string,
     ShadowCounts & { cases: number; disagreement_rate: number | null; miss_rate: number | null }
   >;
+  per_age_group: Record<
+    string,
+    ShadowCounts & { cases: number; disagreement_rate: number | null; miss_rate: number | null }
+  >;
 }
 
 export interface PromotionEvidence {
