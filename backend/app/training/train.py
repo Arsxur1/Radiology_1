@@ -158,7 +158,6 @@ def train(  # pragma: no cover - нужен torch и данные на обуч�
     pretrained: str = "imagenet",
 ) -> dict:
     import torch
-    from torchvision import models
 
     random.seed(seed)
     torch.manual_seed(seed)
