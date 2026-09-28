@@ -20,7 +20,7 @@ from app.services import model_registry, segmentation
 from app.services.classification import is_demo_weights
 from app.services.inference_adapters import StubSegmentationModel
 from app.services.segmentation import ApplicabilityRefused
-from app.services.structure_catalog import region_from_protocol, structures_for_region
+from app.services.structure_catalog import region_for_study, structures_for_region
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -46,8 +46,9 @@ def auto_segment_series(series_id: str) -> dict:
         if is_demo_weights(model_version.weights_hash):
             # Область определяется по протоколу исследования (грудь/живот/мозг).
             study = series.study
-            region = region_from_protocol(
-                study.protocol if study else None, study.description if study else None
+            region = region_for_study(
+                study.body_part if study else None,
+                study.protocol if study else None, study.description if study else None,
             ) or "CHEST"
             keys = [s.key for s in structures_for_region(region)]
             model = StubSegmentationModel(keys, weights_hash=model_version.weights_hash)

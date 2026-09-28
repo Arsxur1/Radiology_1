@@ -53,6 +53,7 @@ def extract_study_meta(tags: dict) -> dict:
         "manufacturer_model": tags.get("ManufacturerModelName"),
         "software_version": tags.get("SoftwareVersions"),
         "protocol": tags.get("ProtocolName"),
+        "body_part": (tags.get("BodyPartExamined") or "").strip().upper() or None,
         "patient_age_years": parse_dicom_age(tags.get("PatientAge")),
     }
 

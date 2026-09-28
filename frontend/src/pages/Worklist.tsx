@@ -57,10 +57,8 @@ export function Worklist() {
               <th>Модальность</th>
               <th>Описание</th>
               <th>Аппарат</th>
-              <th>Серий</th>
-              <th>ИИ</th>
+                <th>ИИ</th>
               <th>Заключение</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -80,9 +78,10 @@ export function Worklist() {
                   </td>
                   <td>{formatAge(s.patient_age_years)}</td>
                   <td>{s.modality}</td>
-                  <td>{s.description ?? "—"}</td>
+                  <td>
+                  <Link to={`/studies/${s.id}`}>{s.description ?? s.study_instance_uid}</Link>
+                </td>
                   <td>{s.manufacturer ?? "—"}</td>
-                  <td>{s.series.length}</td>
                   <td>
                     {s.ai_pending > 0 ? (
                       <span className="badge badge-model">
@@ -100,9 +99,6 @@ export function Worklist() {
                         {REPORT_LABEL[s.report_status]}
                       </span>
                     )}
-                  </td>
-                  <td>
-                    <Link to={`/studies/${s.id}`}>Открыть</Link>
                   </td>
                 </tr>
               ))}

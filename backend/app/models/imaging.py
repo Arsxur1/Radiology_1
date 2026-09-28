@@ -36,6 +36,8 @@ class Study(UUIDMixin, TimestampMixin, Base):
     manufacturer_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     software_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
     protocol: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # DICOM BodyPartExamined (0018,0015) — основной источник области для гейта SR-7.
+    body_part: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # Возраст пациента на момент исследования (лет). Нужен для границ применимости
     # (SR-7): взрослые/дети валидируются раздельно. Дата рождения при этом удаляется.

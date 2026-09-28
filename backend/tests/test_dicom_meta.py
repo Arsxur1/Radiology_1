@@ -52,3 +52,10 @@ def test_parse_dicom_age():
     assert parse_dicom_age("50") == 50.0  # без суффикса — трактуем как годы
     assert parse_dicom_age(None) is None
     assert parse_dicom_age("") is None
+
+
+def test_body_part_extracted():
+    from app.workers.dicom_meta import extract_study_meta
+
+    assert extract_study_meta({"BodyPartExamined": " chest "})["body_part"] == "CHEST"
+    assert extract_study_meta({})["body_part"] is None

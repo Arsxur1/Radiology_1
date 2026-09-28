@@ -43,7 +43,9 @@ services:
 
   # ─── Объектное хранилище ──────────────────────────────────────────────────
   minio:
-    image: minio/minio:latest
+    # Образ настраивается: если minio/minio недоступен в вашем реестре — укажите
+    # зеркало/свою сборку в MINIO_IMAGE (любое S3-совместимое хранилище).
+    image: ${MINIO_IMAGE:-minio/minio:latest}
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -147,6 +149,17 @@ services:
     volumes:
       - ingest_data:/data/ingest
     command: python -m app.workers.folder_watcher
+
+  # ─── Наблюдатель orthanc-raw: снимки от PACS → очередь обезличивания (FR-1) ──
+  orthanc-watcher:
+    build: ./backend
+    restart: unless-stopped
+    <<: *backend-env
+    depends_on:
+      - orthanc-raw
+      - redis
+      - worker
+    command: python -m app.workers.orthanc_watcher
 
   # ─── Просмотрщик ──────────────────────────────────────────────────────────
   ohif:

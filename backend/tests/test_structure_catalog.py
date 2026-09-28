@@ -42,3 +42,13 @@ def test_region_from_description_fallback():
 def test_region_unknown_returns_none():
     assert region_from_protocol("Wrist X-ray") is None
     assert region_from_protocol(None, None) is None
+
+
+def test_region_prefers_dicom_body_part():
+    from app.services.structure_catalog import region_for_study
+
+    assert region_for_study("CHEST", None, "неизвестно") == "CHEST"
+    assert region_for_study("Грудная клетка", None, None) == "CHEST"
+    assert region_for_study("XYZ", "Chest PA", None) == "CHEST"        # запасной путь — протокол
+    assert region_for_study(None, None, "Рентгенография ОГК") == "CHEST"
+    assert region_for_study(None, None, None) is None

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     postgres_audit_password: str = Field("medviz_audit", alias="POSTGRES_AUDIT_PASSWORD")
 
     # Идентифицирующий контур (таблица ID↔UUID, SR-9)
+    idmap_host: str = Field("postgres-idmap", alias="IDMAP_POSTGRES_HOST")
+    idmap_port: int = Field(5432, alias="IDMAP_POSTGRES_PORT")
     idmap_db: str = Field("medviz_idmap", alias="IDMAP_POSTGRES_DB")
     idmap_user: str = Field("medviz_idmap", alias="IDMAP_POSTGRES_USER")
     idmap_password: str = Field("medviz_idmap", alias="IDMAP_POSTGRES_PASSWORD")
@@ -48,6 +50,7 @@ class Settings(BaseSettings):
     orthanc_password: str = Field("medviz", alias="ORTHANC_PASSWORD")
 
     # Celery / Redis
+    redis_url: str = Field("redis://redis:6379/0", alias="REDIS_URL")
     celery_broker_url: str = Field("redis://redis:6379/1", alias="CELERY_BROKER_URL")
     celery_result_backend: str = Field("redis://redis:6379/2", alias="CELERY_RESULT_BACKEND")
 
@@ -73,6 +76,12 @@ class Settings(BaseSettings):
     # Каталог весов моделей: файл <weights_hash>.pt, хеш сверяется при загрузке (SR-5).
     models_dir: str = Field("/data/models", alias="MEDVIZ_MODELS_DIR")
 
+    @field_validator("pacs_aet", "pacs_host", "pacs_port", "pacs_dicomweb_url", mode="before")
+    @classmethod
+    def _empty_is_none(cls, v):
+        # В .env незаполненный параметр — пустая строка («PACS_PORT=»): это «не задано».
+        return None if isinstance(v, str) and not v.strip() else v
+
     @property
     def pacs_configured(self) -> bool:
         return bool(self.pacs_aet and self.pacs_host and self.pacs_port)
@@ -96,7 +105,7 @@ class Settings(BaseSettings):
     def idmap_database_url(self) -> str:
         return (
             f"postgresql+psycopg://{self.idmap_user}:{self.idmap_password}"
-            f"@postgres-idmap:5432/{self.idmap_db}"
+            f"@{self.idmap_host}:{self.idmap_port}/{self.idmap_db}"
         )
 
     @property

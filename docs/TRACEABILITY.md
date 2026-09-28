@@ -38,7 +38,7 @@
 
 | ID | Требование | Статус |
 |---|---|---|
-| FR-1 | Приём, обезличивание, дедуп, связывание пациента, резервная папка | **Реализовано:** `services/ingest.py`, `anonymization.py`, `patient_matching.py`, `workers/folder_watcher.py`; коннектор к внешнему PACS `services/pacs.py`, `pacs_dicomweb.py`, `api/routes_pacs.py` (C-ECHO/C-FIND/C-MOVE, QIDO/WADO) — см. `docs/PACS-INTEGRATION.md` |
+| FR-1 | Приём, обезличивание, дедуп, связывание пациента, резервная папка | **Реализовано:** `services/ingest.py`, `anonymization.py`, `patient_matching.py`, `workers/folder_watcher.py`; наблюдатель журнала orthanc-raw `workers/orthanc_watcher.py` (C-STORE → очередь обезличивания, курсор в Redis; `test_orthanc_watcher.py`); область исследования из DICOM BodyPartExamined (миграция 0008); коннектор к внешнему PACS `services/pacs.py`, `pacs_dicomweb.py`, `api/routes_pacs.py` (C-ECHO/C-FIND/C-MOVE, QIDO/WADO) — см. `docs/PACS-INTEGRATION.md` |
 | FR-2 | Просмотр (MPR, оконные пресеты, сравнение) | **Реализовано:** OHIF (`frontend/config/ohif.js`), `api/routes_studies.py`; рабочее место врача (React) `frontend/src/` — worklist, разбор исследования |
 | FR-3 | Сегментация + правки → correction | **Реализовано (каркас):** `services/segmentation.py`, `api/routes_segmentation.py`, автозапуск `workers/segmentation_tasks.py`; реальная модель — на GPU-стенде |
 | FR-4 | Совмещение модальностей (rigid→affine→deformable, MI, проверка врачом) | **Реализовано (каркас):** `models/registration.py`, `services/registration.py` (гейт «неподтверждённое качество не идёт в измерения»), `api/routes_registration.py`, миграция 0004; UI `frontend/src/pages/ModalityRegistration.tsx` (запуск + визуальное подтверждение врачом); движок SimpleITK/ANTs — на стенде (`test_registration.py`) |

@@ -27,7 +27,7 @@ build:
 
 migrate:
 	docker compose exec backend alembic upgrade head
-	docker compose exec backend python scripts/init_idmap.py
+	docker compose exec -e PYTHONPATH=/app backend python scripts/init_idmap.py
 
 revision:
 	docker compose exec backend alembic revision --autogenerate -m "$(m)"

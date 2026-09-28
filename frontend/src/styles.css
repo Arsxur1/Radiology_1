@@ -38,7 +38,7 @@ a { color: var(--accent); text-decoration: none; }
 .row { display: flex; gap: 12px; align-items: center; }
 .spread { justify-content: space-between; }
 
-.badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+.badge { white-space: nowrap; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
 .badge-model { background: rgba(201,146,43,.18); color: var(--model); border: 1px solid var(--model); }
 .badge-confirmed { background: rgba(47,158,90,.18); color: var(--confirmed); border: 1px solid var(--confirmed); }
 .badge-rejected { background: rgba(181,68,59,.18); color: var(--rejected); border: 1px solid var(--rejected); }

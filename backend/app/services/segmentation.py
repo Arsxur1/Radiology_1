@@ -58,9 +58,9 @@ class SegmentationOutcome:
 
 
 def _series_context(series: Series, study: Study, age_years: float | None) -> SeriesContext:
-    from app.services.structure_catalog import region_from_protocol
+    from app.services.structure_catalog import region_for_study
 
-    body_part = region_from_protocol(study.protocol, study.description)
+    body_part = region_for_study(study.body_part, study.protocol, study.description)
     # Явно переданный возраст приоритетен; иначе берём возраст из исследования (SR-7).
     effective_age = age_years if age_years is not None else study.patient_age_years
     return SeriesContext(

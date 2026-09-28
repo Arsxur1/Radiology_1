@@ -80,6 +80,25 @@ _REGION_KEYWORDS: tuple[tuple[str, str], ...] = (
 )
 
 
+# Значения DICOM BodyPartExamined (PS3.16 Annex L) → область каталога.
+_DICOM_BODY_PARTS = {
+    "CHEST": "CHEST", "THORAX": "THORAX", "LUNG": "CHEST", "CHEST_ABDOMEN": "CHEST",
+    "ABDOMEN": "ABDOMEN", "HEAD": "HEAD", "SKULL": "HEAD", "BRAIN": "BRAIN",
+}
+
+
+def region_for_study(body_part: str | None, protocol: str | None, description: str | None) -> str | None:
+    """Область исследования: сперва DICOM BodyPartExamined, затем протокол/описание."""
+    if body_part:
+        key = body_part.strip().upper().replace(" ", "_")
+        if key in _DICOM_BODY_PARTS:
+            return _DICOM_BODY_PARTS[key]
+        found = region_from_protocol(body_part)  # «ГРУДНАЯ КЛЕТКА» и т.п.
+        if found:
+            return found
+    return region_from_protocol(protocol, description)
+
+
 def region_from_protocol(protocol: str | None, description: str | None = None) -> str | None:
     """Определить анатомическую область по протоколу/описанию исследования.
 

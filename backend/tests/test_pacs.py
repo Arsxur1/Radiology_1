@@ -82,3 +82,12 @@ def test_require_pynetdicom_raises_when_absent():
     except Exception:
         with pytest.raises(PacsUnavailable):
             _require_pynetdicom()
+
+
+def test_empty_pacs_settings_mean_not_configured(monkeypatch):
+    from app.core.config import Settings
+
+    for k in ("PACS_AET", "PACS_HOST", "PACS_PORT", "PACS_DICOMWEB_URL"):
+        monkeypatch.setenv(k, "")
+    s = Settings(_env_file=None)
+    assert s.pacs_port is None and not s.pacs_configured
