@@ -24,7 +24,7 @@ from app.workers.celery_app import celery_app
 logger = logging.getLogger(__name__)
 
 
-def segment_with_all(db, series: Series) -> dict:
+def segment_with_all(db, series: Series, publish_seg=None) -> dict:
     """Прогнать серию через ACTIVE и SHADOW модели сегментации. Вынесено для тестов.
 
     SHADOW — теневой прогон кандидата: находки пишутся с shadow_run=True и врачу не видны.
@@ -42,7 +42,8 @@ def segment_with_all(db, series: Series) -> dict:
         tag = f"{mv.name}@{mv.semver}"
         try:
             model = segmentation.load_segmentation_model(mv, series)
-            out = segmentation.segment_series(db, series=series, model_version=mv, model=model, age_years=age)
+            out = segmentation.segment_series(db, series=series, model_version=mv, model=model, age_years=age,
+                                              publish_seg=publish_seg)
             db.commit()
             results.append({"model": tag, "structures": out.structure_count,
                             "shadow": mv.status == ModelStatus.SHADOW})
@@ -69,6 +70,6 @@ def auto_segment_series(series_id: str) -> dict:
         series = db.get(Series, uuid.UUID(series_id))
         if series is None:
             return {"skipped": "series_not_found"}
-        return segment_with_all(db, series)
+        return segment_with_all(db, series, publish_seg=segmentation.publish_seg_to_viewer)
     finally:
         db.close()

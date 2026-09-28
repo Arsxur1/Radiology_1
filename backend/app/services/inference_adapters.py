@@ -35,6 +35,8 @@ class SegmentationOutput:
     extra_metrics: dict = field(default_factory=dict)
     # Шаг сетки маски (мм) — если адаптер его знает, измерения считаются по нему.
     spacing_mm: tuple[float, float, float] | None = None
+    # DICOM SEG для показа контуров в OHIF (публикуется, только если результат видит врач).
+    seg_dicom: bytes | None = None
 
 
 class SegmentationModel(ABC):
@@ -146,6 +148,36 @@ class TotalSegmentatorAdapter(SegmentationModel):  # pragma: no cover - нуже
         if actual != weights_hash:
             raise RuntimeError(f"Отпечаток весов TotalSegmentator не совпадает: {actual} != {weights_hash}")
 
+    def _seg(self, sources: list[bytes], labelmap, affine, class_names: dict[int, str]) -> bytes | None:
+        """DICOM SEG по структурам каталога; ошибка построения не отменяет измерения."""
+        import io
+        import logging
+
+        import pydicom
+
+        from app.services.dicom_seg import SegSegment, build_seg
+        from app.services.structure_catalog import structure_by_key
+
+        by_name = {name: idx for idx, name in class_names.items()}
+        segments = []
+        for key in self._keys:
+            ids = [by_name[m] for m in TS_GROUPS.get(key, (key,)) if m in by_name]
+            if ids:
+                cat = structure_by_key(key)
+                segments.append(SegSegment(key, cat.label_ru if cat else key, ids))
+        try:
+            version = f"{self._task}-{'fast' if self._fast else 'full'}"
+            seg = build_seg([pydicom.dcmread(io.BytesIO(b)) for b in sources], labelmap, affine, segments,
+                            algorithm="TotalSegmentator", algorithm_version=version)
+            if seg is None:
+                return None
+            buf = io.BytesIO()
+            seg.save_as(buf)
+            return buf.getvalue()
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).warning("DICOM SEG не построен", exc_info=True)
+            return None
+
     def infer(self, series_object_prefix: str, spacing: tuple[float, float, float]) -> SegmentationOutput:
         import gzip
         import subprocess
@@ -157,10 +189,11 @@ class TotalSegmentatorAdapter(SegmentationModel):  # pragma: no cover - нуже
         import numpy as np
         from totalsegmentator.map_to_binary import class_map
 
+        sources = self._fetch(series_object_prefix)
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "dicom"
             src.mkdir()
-            for i, data in enumerate(self._fetch(series_object_prefix)):
+            for i, data in enumerate(sources):
                 (src / f"{i:05d}.dcm").write_bytes(data)
             out_file = Path(tmp) / "seg.nii.gz"
             cmd = [sys.executable, "-m", "app.workers.totalseg_runner", str(src), str(out_file),
@@ -178,6 +211,7 @@ class TotalSegmentatorAdapter(SegmentationModel):  # pragma: no cover - нуже
             key = f"{series_object_prefix}/totalseg_{self._task}_{self.weights_hash[:12]}.nii.gz"
             ref = self._store(key, gzip.compress(img.to_bytes()))
         return SegmentationOutput(
+            seg_dicom=self._seg(sources, labelmap, img.affine, class_map[self._task]),
             mask_artifact_ref=ref,
             structures=structures,
             preprocessing_params={"adapter": "totalsegmentator", "task": self._task, "fast": self._fast,

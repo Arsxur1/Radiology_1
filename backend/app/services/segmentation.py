@@ -65,6 +65,18 @@ def region_keys(series: Series) -> list[str]:
     return [s.key for s in structures_for_region(region)]
 
 
+def publish_seg_to_viewer(seg_bytes: bytes) -> dict:  # pragma: no cover - нужен Orthanc
+    """Загрузить DICOM SEG в обезличенный Orthanc — OHIF покажет его в исследовании."""
+    from app.services.orthanc import clean_client
+
+    client = clean_client()
+    try:
+        r = client.upload_dicom(seg_bytes)
+    finally:
+        client.close()
+    return {"orthanc_id": r.get("ID"), "series": r.get("ParentSeries")}
+
+
 def load_segmentation_model(model_version: ModelVersion, series: Series):
     """Заглушка — только для демо-весов; иначе TotalSegmentator (SR-4: при ошибке — без находок)."""
     from app.services.classification import is_demo_weights
@@ -144,6 +156,7 @@ def segment_series(
     model_version: ModelVersion,
     model: SegmentationModel,
     age_years: float | None = None,
+    publish_seg=None,
 ) -> SegmentationOutcome:
     """Сегментировать серию и породить находки. Отказ по SR-7 при выходе за границы."""
     study = db.get(Study, series.study_id)
@@ -178,6 +191,15 @@ def segment_series(
     )
     db.add(inference)
     db.flush()
+
+    # Контуры для просмотрщика — только если результат видит врач (не теневой прогон).
+    if output.seg_dicom and publish_seg is not None and not inference.shadow_run:
+        try:
+            inference.metrics = {**(inference.metrics or {}), "dicom_seg": publish_seg(output.seg_dicom)}
+        except Exception:  # noqa: BLE001 - без контуров измерения всё равно доступны
+            import logging
+
+            logging.getLogger(__name__).warning("DICOM SEG не опубликован", exc_info=True)
 
     # 4. Находки: source=model, статус pending (не подтверждено врачом).
     finding_ids: list[uuid.UUID] = []
