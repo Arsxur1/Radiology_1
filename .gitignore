@@ -15,6 +15,9 @@ venv/
 backups/
 data/
 *.dcm
+# Веса моделей (кладутся на сервер вручную, в git не хранятся)
+models/
+*.pt
 
 # IDE
 .vscode/

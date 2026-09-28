@@ -166,6 +166,34 @@ class TorchCXRClassifier(ClassificationModel):  # pragma: no cover - нужен 
         return out
 
 
+DEMO_WEIGHTS_PREFIXES = ("demo-", "stub-")
+
+
+class ModelUnavailable(Exception):
+    """Веса модели не загружаются (нет файла, не совпал хеш, нет torch)."""
+
+
+def is_demo_weights(weights_hash: str) -> bool:
+    return weights_hash.startswith(DEMO_WEIGHTS_PREFIXES)
+
+
+def load_model(model_version: ModelVersion) -> ClassificationModel:
+    """Заглушка — только для демо-весов; для настоящих — реальный адаптер.
+
+    Так на продуктивном сервере заглушка не может выдать врачу фиктивные находки:
+    если веса недоступны — явная ошибка и никаких черновиков (просмотр не страдает, SR-4).
+    """
+    if is_demo_weights(model_version.weights_hash):
+        return StubClassificationModel(sorted(model_version.operating_points or {}), model_version.weights_hash)
+    try:  # pragma: no cover - нужен torch и файл весов
+        from app.core.config import get_settings
+        from app.services import storage
+
+        return TorchCXRClassifier(model_version.weights_hash, get_settings().models_dir, storage.first_series_object)
+    except (ImportError, OSError, RuntimeError) as e:
+        raise ModelUnavailable(f"{model_version.name}@{model_version.semver}: {e}") from e
+
+
 @dataclass
 class ClassificationOutcome:
     inference_result_id: uuid.UUID

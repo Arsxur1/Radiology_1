@@ -17,22 +17,11 @@ from app.db.session import SessionLocal
 from app.models.imaging import Series
 from app.models.ml import ModelStatus
 from app.services import classification, model_registry
-from app.services.classification import StubClassificationModel
+from app.services.classification import ModelUnavailable
 from app.services.segmentation import ApplicabilityRefused
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
-
-
-def _load_model(model_version, use_stub: bool):
-    if use_stub:
-        return StubClassificationModel(sorted(model_version.operating_points or {}), model_version.weights_hash)
-    from app.services import storage  # pragma: no cover
-    from app.services.classification import TorchCXRClassifier  # pragma: no cover
-
-    return TorchCXRClassifier(  # pragma: no cover
-        model_version.weights_hash, get_settings().models_dir, storage.first_series_object
-    )
 
 
 def _store_heatmap(key: str, data: bytes) -> str:  # pragma: no cover - нужен MinIO
@@ -41,7 +30,7 @@ def _store_heatmap(key: str, data: bytes) -> str:  # pragma: no cover - нуже
     return storage.put_object(get_settings().bucket_masks, key, data, content_type="image/png")
 
 
-def classify_with_all(db, series: Series, *, use_stub: bool, store_artifact=None) -> dict:
+def classify_with_all(db, series: Series, *, store_artifact=None) -> dict:
     """Прогнать серию через ACTIVE и SHADOW классификаторы. Вынесено для тестов."""
     versions = model_registry.models_for(
         db, task="classification", modality=series.modality,
@@ -54,7 +43,7 @@ def classify_with_all(db, series: Series, *, use_stub: bool, store_artifact=None
     for mv in versions:
         try:
             out = classification.classify_series(
-                db, series=series, model_version=mv, model=_load_model(mv, use_stub), age_years=age,
+                db, series=series, model_version=mv, model=classification.load_model(mv), age_years=age,
                 store_artifact=store_artifact,
             )
             results.append({"model": f"{mv.name}@{mv.semver}", "drafts": len(out.finding_ids),
@@ -62,17 +51,20 @@ def classify_with_all(db, series: Series, *, use_stub: bool, store_artifact=None
         except ApplicabilityRefused as e:
             logger.info("Серия %s вне границ применимости %s: %s", series.id, mv.name, e.reasons)
             results.append({"model": f"{mv.name}@{mv.semver}", "refused": e.reasons})
+        except ModelUnavailable as e:
+            logger.error("Модель недоступна, черновики не созданы: %s", e)
+            results.append({"model": f"{mv.name}@{mv.semver}", "error": str(e)})
     return {"results": results}
 
 
 @celery_app.task(name="classification.auto_classify_series")
-def auto_classify_series(series_id: str, use_stub: bool = True) -> dict:
+def auto_classify_series(series_id: str) -> dict:
     db = SessionLocal()
     try:
         series = db.get(Series, uuid.UUID(series_id))
         if series is None:
             return {"skipped": "series_not_found"}
-        result = classify_with_all(db, series, use_stub=use_stub, store_artifact=_store_heatmap)
+        result = classify_with_all(db, series, store_artifact=_store_heatmap)
         db.commit()
         return result
     finally:

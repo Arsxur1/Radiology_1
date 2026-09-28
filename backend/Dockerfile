@@ -12,7 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml ./
-RUN pip install --upgrade pip && pip install -e .
+# EXTRAS="[infer]" — зависимости реального инференса классификатора (torch, CPU достаточно).
+ARG EXTRAS=""
+RUN pip install --upgrade pip && pip install -e ".${EXTRAS}"
 
 COPY . .
 

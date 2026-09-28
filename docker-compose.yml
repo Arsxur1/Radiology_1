@@ -114,13 +114,18 @@ services:
         condition: service_started
     volumes:
       - ingest_data:/data/ingest
+      - ./models:/data/models:ro
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
       - "8000:8000"
 
   # ─── Воркеры приёма/обезличивания ─────────────────────────────────────────
   worker:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        # Для реальной модели: WORKER_EXTRAS=[infer] в .env и `docker compose build worker`.
+        EXTRAS: ${WORKER_EXTRAS:-}
     restart: unless-stopped
     <<: *backend-env
     depends_on:
@@ -128,6 +133,8 @@ services:
       - redis
     volumes:
       - ingest_data:/data/ingest
+      # Веса моделей: <weights_hash>.pt, только чтение (хеш сверяется при загрузке).
+      - ./models:/data/models:ro
     command: celery -A app.workers.celery_app worker --loglevel=INFO
 
   # ─── Наблюдатель за сетевой папкой (FR-1, резервный путь приёма) ───────────

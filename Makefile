@@ -48,4 +48,4 @@ check-pacs:
 	bash scripts/check_pacs.sh
 
 seed:
-	docker compose exec backend python scripts/seed_demo.py
+	docker compose exec backend python scripts/seed_demo.py --with-storage

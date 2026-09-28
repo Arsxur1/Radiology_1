@@ -17,6 +17,7 @@ import uuid
 from app.db.session import SessionLocal
 from app.models.imaging import Series
 from app.services import model_registry, segmentation
+from app.services.classification import is_demo_weights
 from app.services.inference_adapters import StubSegmentationModel
 from app.services.segmentation import ApplicabilityRefused
 from app.services.structure_catalog import region_from_protocol, structures_for_region
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="segmentation.auto_segment_series")
-def auto_segment_series(series_id: str, use_stub: bool = True) -> dict:
+def auto_segment_series(series_id: str) -> dict:
     """Автоматически сегментировать серию активной моделью, если она есть."""
     db = SessionLocal()
     try:
@@ -41,7 +42,8 @@ def auto_segment_series(series_id: str, use_stub: bool = True) -> dict:
             # Нет допущенной модели — контур просмотра/приёма не страдает (SR-4).
             return {"skipped": "no_active_model"}
 
-        if use_stub:
+        # Заглушка — только для демо-весов: на продуктивном сервере фиктивных находок нет.
+        if is_demo_weights(model_version.weights_hash):
             # Область определяется по протоколу исследования (грудь/живот/мозг).
             study = series.study
             region = region_from_protocol(
@@ -68,5 +70,10 @@ def auto_segment_series(series_id: str, use_stub: bool = True) -> dict:
             # SR-7: явный отказ, результат не пишется.
             logger.info("Серия %s вне границ применимости: %s", series_id, e.reasons)
             return {"refused": True, "reasons": e.reasons}
+        except (NotImplementedError, OSError, RuntimeError) as e:
+            # Модель недоступна — черновиков нет, просмотр не страдает (SR-4).
+            db.rollback()
+            logger.error("Модель сегментации %s недоступна: %s", model_version.name, e)
+            return {"error": str(e)}
     finally:
         db.close()

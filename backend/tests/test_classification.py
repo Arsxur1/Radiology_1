@@ -137,8 +137,25 @@ def test_models_for_and_worker_runs_active_and_shadow(db):
     found = model_registry.models_for(db, task="classification", modality="DX",
                                       statuses=(ModelStatus.ACTIVE, ModelStatus.SHADOW))
     assert {m.id for m in found} == {active.id, shadow.id}
-    result = classify_with_all(db, _series(db), use_stub=True)
+    for m in (active, shadow):
+        m.weights_hash = "demo-w"
+    db.flush()
+    result = classify_with_all(db, _series(db))
     assert sorted(r["shadow"] for r in result["results"]) == [False, True]
+
+
+def test_real_weights_never_fall_back_to_stub(db):
+    from app.services.classification import StubClassificationModel, load_model
+
+    demo = _model(db)
+    demo.weights_hash = "demo-1"
+    assert isinstance(load_model(demo), StubClassificationModel)
+    _model(db, name="real")                                  # weights_hash="w": настоящие веса
+    db.delete(demo)
+    db.flush()
+    result = classify_with_all(db, _series(db))
+    assert "error" in result["results"][0]                    # нет файла весов/torch → ошибка
+    assert db.query(Finding).count() == 0                     # и никаких фиктивных черновиков
 
 
 # ─── Метки площадки и сравнение теневого прогона ─────────────────────────────
