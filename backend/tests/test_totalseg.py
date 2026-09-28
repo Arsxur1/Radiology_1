@@ -65,3 +65,30 @@ def test_active_and_shadow_segmentation(db):
     assert "error" in res["real@1"]                          # настоящие веса не подменяются заглушкой
     shadow = db.query(InferenceResult).filter_by(shadow_run=True).count()
     assert shadow == 1 and db.query(Finding).count() > 0
+
+
+def test_segmentation_shadow_report_compares_volumes(db):
+    from app.services import corrections, segmentation
+    from app.services.inference_adapters import StubSegmentationModel
+    from app.services.shadow_eval import segmentation_shadow_report
+
+    _, study, series = _make_series(db)
+    study.patient_age_years = 45.0
+    app_ = {"modality": ["CT"], "body_part": ["CHEST"], "age": {"min_years": 18}}
+    active = ModelVersion(name="act", semver="1", weights_hash="demo-a", applicability=app_,
+                          status=ModelStatus.ACTIVE, task="segmentation")
+    cand = ModelVersion(name="cand", semver="1", weights_hash="demo-b", applicability=app_,
+                        status=ModelStatus.SHADOW, task="segmentation")
+    db.add_all([active, cand])
+    db.flush()
+    stub = StubSegmentationModel(["heart", "aorta"])
+    a = segmentation.segment_series(db, series=series, model_version=active, model=stub, age_years=45)
+    segmentation.segment_series(db, series=series, model_version=cand, model=stub, age_years=45)
+    heart, aorta = (db.get(Finding, i) for i in a.finding_ids)
+    corrections.confirm_finding(db, finding_id=heart.id, physician="dr")            # объём тот же
+    corrections.modify_finding(db, finding_id=aorta.id, physician="dr",
+                               new_measurements={"volume_ml": aorta.measurements["volume_ml"] * 2})
+    rep = segmentation_shadow_report(db, cand.id)
+    assert rep["compared_series"] == 1 and rep["per_structure"]["heart"]["median_rel_error"] == 0
+    assert rep["per_structure"]["aorta"]["within_tolerance"] == 0          # врач удвоил объём
+    assert rep["disagreement_rate"] == 0.5 and "взрослые" in rep["per_age_group"]

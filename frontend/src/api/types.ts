@@ -87,7 +87,26 @@ export interface ShadowCounts {
   fn: number;
 }
 
+export interface SegShadowSummary {
+  n: number;
+  median_rel_error: number;
+  within_tolerance: number;
+}
+
+export interface SegmentationShadowReport {
+  task: "segmentation";
+  model: string;
+  tolerance: number;
+  shadow_runs: number;
+  compared_series: number;
+  disagreement_rate: number | null;
+  overall: SegShadowSummary | null;
+  per_structure: Record<string, SegShadowSummary>;
+  per_age_group: Record<string, SegShadowSummary>;
+}
+
 export interface ShadowReport {
+  task?: undefined;
   model: string;
   shadow_runs: number;
   reviewed_cases: number;

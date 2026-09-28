@@ -127,8 +127,10 @@ def shadow_report(
     _: CurrentUser = Depends(require_roles(Role.ADMIN)),
 ) -> dict:
     """Теневой прогон против подписанных заключений: данные для гейта (шаг 5)."""
-    from app.services.shadow_eval import shadow_report as build
+    from app.services.shadow_eval import segmentation_shadow_report, shadow_report
 
+    mv = db.get(ModelVersion, version_id)
+    build = segmentation_shadow_report if mv is not None and mv.task == "segmentation" else shadow_report
     try:
         return build(db, version_id)
     except LookupError as e:

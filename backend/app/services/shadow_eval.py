@@ -98,3 +98,70 @@ def shadow_report(db: Session, model_version_id: uuid.UUID) -> dict:
         "per_age_group": {g: _slice(per_age[g]) for _, _, g in (*AGE_GROUPS, (0, 0, "возраст неизвестен"))
                           if g in per_age},
     }
+
+
+def segmentation_shadow_report(db: Session, model_version_id: uuid.UUID, tolerance: float = 0.10) -> dict:
+    """Теневой прогон сегментации: объёмы кандидата против объёмов, принятых врачом.
+
+    Эталон — находки той же серии со структурой того же ключа, которые врач подтвердил
+    или исправил (не теневые). Метрика — относительная ошибка объёма и доля случаев в
+    пределах tolerance (по умолчанию 10%), по каждой структуре и по возрастным группам.
+    """
+    from statistics import median
+
+    from app.models.ml import ConfirmationStatus, Finding
+
+    mv = db.get(ModelVersion, model_version_id)
+    if mv is None:
+        raise LookupError("Версия модели не найдена")
+    rows = db.execute(
+        select(InferenceResult, Series, Study)
+        .join(Series, InferenceResult.series_id == Series.id)
+        .join(Study, Series.study_id == Study.id)
+        .where(InferenceResult.model_version_id == mv.id, InferenceResult.shadow_run.is_(True))
+    ).all()
+
+    errors: dict[str, list[float]] = {}
+    by_age: dict[str, list[float]] = {}
+    compared_series: set = set()
+    for inference, series, study in rows:
+        reference = {}
+        for f in db.execute(
+            select(Finding)
+            .outerjoin(InferenceResult, Finding.inference_result_id == InferenceResult.id)
+            .where(Finding.series_id == series.id,
+                   Finding.confirmation_status == ConfirmationStatus.CONFIRMED,
+                   (InferenceResult.id.is_(None)) | (InferenceResult.shadow_run.is_(False)))
+        ).scalars():
+            key = (f.coordinates or {}).get("structure_key")
+            vol = (f.measurements or {}).get("volume_ml")
+            if key and isinstance(vol, int | float) and vol > 0:
+                reference[key] = float(vol)
+        for f in db.execute(select(Finding).where(Finding.inference_result_id == inference.id)).scalars():
+            key = (f.coordinates or {}).get("structure_key")
+            vol = (f.measurements or {}).get("volume_ml")
+            if key in reference and isinstance(vol, int | float):
+                err = abs(float(vol) - reference[key]) / reference[key]
+                errors.setdefault(key, []).append(err)
+                by_age.setdefault(age_group(study.patient_age_years), []).append(err)
+                compared_series.add(series.id)
+
+    def summary(values: list[float]) -> dict:
+        return {"n": len(values), "median_rel_error": round(median(values), 4),
+                "within_tolerance": round(sum(v <= tolerance for v in values) / len(values), 4)}
+
+    all_errors = [e for v in errors.values() for e in v]
+    return {
+        "model_version_id": str(mv.id),
+        "model": f"{mv.name}@{mv.semver}",
+        "task": "segmentation",
+        "tolerance": tolerance,
+        "shadow_runs": len(rows),
+        "compared_series": len(compared_series),
+        "overall": summary(all_errors) if all_errors else None,
+        # Доля структур, где объём кандидата вышел за допуск, — аналог доли отклонений для гейта.
+        "disagreement_rate": round(1 - summary(all_errors)["within_tolerance"], 4) if all_errors else None,
+        "per_structure": {k: summary(v) for k, v in sorted(errors.items())},
+        "per_age_group": {g: summary(by_age[g]) for _, _, g in (*AGE_GROUPS, (0, 0, "возраст неизвестен"))
+                          if g in by_age},
+    }

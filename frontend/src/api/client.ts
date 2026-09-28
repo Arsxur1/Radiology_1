@@ -15,6 +15,7 @@ import type {
   RegistrationOut,
   RegistrationStage,
   ReportOut,
+  SegmentationShadowReport,
   ShadowReport,
   StudyOut,
   TemporalSeries,
@@ -142,7 +143,8 @@ export const api = {
   calibration: (versionId: string) => request<CalibrationProposal>(`/models/${versionId}/calibration`),
   calibratedCandidate: (versionId: string) =>
     request<ModelOut>(`/models/${versionId}/calibrated-candidate`, { method: "POST" }),
-  shadowReport: (versionId: string) => request<ShadowReport>(`/models/${versionId}/shadow-report`),
+  shadowReport: (versionId: string) =>
+    request<ShadowReport | SegmentationShadowReport>(`/models/${versionId}/shadow-report`),
 
   evaluateModel: (candidateId: string, evidence: PromotionEvidence) =>
     request<PromotionGateResult>(`/models/${candidateId}/evaluate`, {

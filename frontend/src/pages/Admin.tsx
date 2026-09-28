@@ -14,6 +14,8 @@ import type {
   PromotionEvidence,
   PromotionGateResult,
   CalibrationProposal,
+  SegmentationShadowReport,
+  SegShadowSummary,
   ShadowReport,
 } from "../api/types";
 
@@ -106,6 +108,46 @@ function SliceTable({ title, rows }: { title: string; rows: ShadowReport["per_ma
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function SegRows({ title, rows }: { title: string; rows: Record<string, SegShadowSummary> }) {
+  return (
+    <div className="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>{title}</th>
+            <th>Сравнений</th>
+            <th>Медианная ошибка объёма</th>
+            <th>В пределах допуска</th>
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(rows).map(([k, v]) => (
+            <tr key={k}>
+              <td>{k}</td>
+              <td>{v.n}</td>
+              <td>{pct(v.median_rel_error)}</td>
+              <td>{pct(v.within_tolerance)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SegShadowView({ report }: { report: SegmentationShadowReport }) {
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div>
+        Теневых прогонов: {report.shadow_runs}; серий со сверкой с врачом: {report.compared_series}. Объём вне допуска
+        ±{Math.round(report.tolerance * 100)}%: <strong>{pct(report.disagreement_rate)}</strong>
+      </div>
+      <SegRows title="Структура" rows={report.per_structure} />
+      <SegRows title="Возраст" rows={report.per_age_group} />
     </div>
   );
 }
@@ -208,7 +250,7 @@ const EMPTY_EVIDENCE: PromotionEvidence = {
 function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void }) {
   const [ev, setEv] = useState<PromotionEvidence>(EMPTY_EVIDENCE);
   const [gate, setGate] = useState<PromotionGateResult | null>(null);
-  const [shadow, setShadow] = useState<ShadowReport | null>(null);
+  const [shadow, setShadow] = useState<ShadowReport | SegmentationShadowReport | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   async function guard<T>(fn: () => Promise<T>) {
@@ -311,7 +353,8 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
               Продвинуть в ASSIST
             </button>
           </div>
-          {shadow && <ShadowReportView report={shadow} />}
+          {shadow &&
+            (shadow.task === "segmentation" ? <SegShadowView report={shadow} /> : <ShadowReportView report={shadow} />)}
           {gate && (
             <div style={{ marginTop: 6 }} className={gate.ok ? "" : "error"}>
               {gate.ok ? "Готов к продвижению ✓" : "Нельзя продвинуть:"}
