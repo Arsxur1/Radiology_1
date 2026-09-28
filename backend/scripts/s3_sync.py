@@ -11,7 +11,6 @@ S3 — источник истины для пикселей: обезличен
 
 from __future__ import annotations
 
-import io
 import sys
 from pathlib import Path
 

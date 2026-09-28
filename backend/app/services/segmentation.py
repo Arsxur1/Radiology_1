@@ -67,14 +67,13 @@ def region_keys(series: Series) -> list[str]:
 
 def publish_seg_to_viewer(seg_bytes: bytes) -> dict:  # pragma: no cover - нужен Orthanc
     """Загрузить DICOM SEG в обезличенный Orthanc — OHIF покажет его в исследовании."""
-    from app.services.orthanc import clean_client
-
     import io
 
     import pydicom
 
     from app.core.config import get_settings
     from app.services import storage
+    from app.services.orthanc import clean_client
 
     # Копия в S3 — источник истины для пересборки просмотрщика при восстановлении.
     ds = pydicom.dcmread(io.BytesIO(seg_bytes), stop_before_pixels=True)
