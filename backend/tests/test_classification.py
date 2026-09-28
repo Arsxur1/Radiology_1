@@ -191,3 +191,66 @@ def test_report_sentence_for_qualitative_finding():
     draft = build_draft([FindingInput("f1", "Плевральный выпот", "CXR-200", "MEDVIZ-CXR",
                                       {"confidence": 0.8}, True)])
     assert draft.text == "Плевральный выпот [MEDVIZ-CXR:CXR-200]."
+
+
+# ─── Тепловые карты ───────────────────────────────────────────────────────────
+def test_heatmap_png_is_valid_rgba():
+    import struct
+    import zlib
+
+    from app.services.heatmap import stub_grid, to_png
+
+    png = to_png(stub_grid("x", size=16))
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    w, h, depth, color = struct.unpack(">IIBB", png[16:26])
+    assert (w, h, depth, color) == (16, 16, 8, 6)
+    idat = png[png.index(b"IDAT") + 4: png.index(b"IEND") - 8]
+    raw = zlib.decompress(idat)
+    assert len(raw) == 16 * (1 + 16 * 4)
+    alphas = [raw[r * 65 + 1 + x * 4 + 3] for r in range(16) for x in range(16)]
+    assert max(alphas) > 0 and min(alphas) == 0          # пятно видно, фон прозрачный
+    assert to_png([[1.0, 1.0]]) == to_png([[0.0, 0.0]])  # плоская карта — пустая
+
+
+def test_heatmaps_stored_for_visible_drafts_only(db):
+    from app.api.routes_findings import heatmap_ref_for
+    from app.services.classification import StubClassificationModel
+
+    stored: dict[str, bytes] = {}
+
+    def store(key, data):
+        stored[key] = data
+        return f"masks/{key}"
+
+    series = _series(db)
+    mv = _model(db)
+    stub = StubClassificationModel(sorted(OPS), mv.weights_hash)
+    out = classification.classify_series(db, series=series, model_version=mv, model=stub, store_artifact=store)
+    assert len(stored) == len(out.finding_ids) > 0
+    fid = out.finding_ids[0]
+    assert heatmap_ref_for(db, fid).startswith("masks/pfx/s1/heatmap_")
+    assert list_series_findings(series.id, db)[0].has_heatmap
+
+    shadow = _model(db, status=ModelStatus.SHADOW, name="next")
+    before = len(stored)
+    sout = classification.classify_series(db, series=series, model_version=shadow, model=stub, store_artifact=store)
+    assert len(stored) == before                          # для теневого прогона карт нет
+    with pytest.raises(LookupError):
+        heatmap_ref_for(db, sout.finding_ids[0])
+    doc = corrections.create_physician_finding(db, series_id=series.id, physician="dr", measurements={})
+    with pytest.raises(LookupError):
+        heatmap_ref_for(db, doc.id)
+
+
+def test_code_change_is_negative_for_original_code(db):
+    from app.services.site_labels import series_truth
+
+    series, mv = _series(db), _model(db)
+    out = classification.classify_series(db, series=series, model_version=mv, model=FixedModel(PROBS))
+    with pytest.raises(CorrectionError):
+        corrections.modify_finding(db, finding_id=out.finding_ids[0], physician="dr", new_code="CXR-XXX")
+    corrections.modify_finding(db, finding_id=out.finding_ids[0], physician="dr", new_code="CXR-201")
+    f = db.get(Finding, out.finding_ids[0])
+    assert f.label and f.label != "Плевральный выпот"          # подпись из словаря
+    truth = series_truth(db, series)
+    assert truth.positives == {"CXR-201"} and truth.negatives == {"CXR-200"}

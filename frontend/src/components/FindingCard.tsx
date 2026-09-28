@@ -5,7 +5,7 @@
 // - Никакого «принять всё»: каждое решение — по одной находке.
 // - Затраченное время фиксируется от момента появления карточки (обучающий сигнал).
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
 import type { FindingOut } from "../api/types";
 
@@ -19,13 +19,87 @@ function StatusBadge({ f }: { f: FindingOut }) {
   return <span className="badge badge-physician">добавлено врачом</span>;
 }
 
-function Measurements({ m }: { m: Record<string, unknown> }) {
-  const entries = Object.entries(m);
+// Служебные величины классификатора показываются отдельно, не как измерения.
+const SERVICE_KEYS = new Set(["confidence", "threshold"]);
+
+function Measurements({ m, qualitative }: { m: Record<string, unknown>; qualitative: boolean }) {
+  const entries = Object.entries(m).filter(([k]) => !SERVICE_KEYS.has(k));
+  if (entries.length === 0 && qualitative) return null;
   if (entries.length === 0) return <span className="muted">измерения отсутствуют</span>;
   return (
     <span className="meas">
       {entries.map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`).join("; ")}
     </span>
+  );
+}
+
+function Confidence({ m }: { m: Record<string, unknown> }) {
+  const p = typeof m.confidence === "number" ? m.confidence : null;
+  const t = typeof m.threshold === "number" ? m.threshold : null;
+  if (p === null) return null;
+  return (
+    <div className="muted" style={{ marginBottom: 6 }} title="Оценка модели, а не вероятность диагноза">
+      уверенность модели: <strong>{Math.round(p * 100)}%</strong>
+      {t !== null && <> (порог показа {Math.round(t * 100)}%)</>}
+      <div style={{ background: "#333", height: 4, borderRadius: 2, marginTop: 3, maxWidth: 240 }}>
+        <div style={{ width: `${Math.round(p * 100)}%`, background: "#d9a441", height: 4, borderRadius: 2 }} />
+      </div>
+    </div>
+  );
+}
+
+function HeatmapView({ finding }: { finding: FindingOut }) {
+  const [urls, setUrls] = useState<{ image: string; heat: string } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(
+    () => () => {
+      if (urls) {
+        URL.revokeObjectURL(urls.image);
+        URL.revokeObjectURL(urls.heat);
+      }
+    },
+    [urls],
+  );
+
+  async function toggle() {
+    setErr(null);
+    if (!open && !urls) {
+      try {
+        const [image, heat] = await Promise.all([
+          api.seriesPreviewUrl(finding.series_id),
+          api.findingHeatmapUrl(finding.id),
+        ]);
+        setUrls({ image, heat });
+      } catch (e) {
+        setErr(e instanceof ApiError ? e.message : String(e));
+        return;
+      }
+    }
+    setOpen(!open);
+  }
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button onClick={toggle}>{open ? "Скрыть зону внимания" : "Зона внимания ИИ"}</button>
+      {open && urls && (
+        <div style={{ marginTop: 6 }}>
+          <div style={{ position: "relative", display: "inline-block", maxWidth: "100%" }}>
+            <img src={urls.image} alt="снимок" style={{ display: "block", maxWidth: "100%", maxHeight: 420 }} />
+            <img
+              src={urls.heat}
+              alt="зона внимания модели"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+            />
+          </div>
+          <div className="muted" style={{ fontSize: 12 }}>
+            Показывает, на какие области опиралась модель. Это не разметка патологии и не измерение.
+          </div>
+        </div>
+      )}
+      {err && <div className="error">Карта недоступна: {err}</div>}
+    </div>
   );
 }
 
@@ -51,6 +125,13 @@ export function FindingCard({ finding, onChange }: { finding: FindingOut; onChan
   }
 
   async function onModify() {
+    if ((finding.code ?? "").startsWith("CXR-")) {
+      // Качественная находка ОГК: правка — это замена кода на верный из словаря.
+      const code = window.prompt("Верный код находки из словаря (например, CXR-201):", finding.code ?? "");
+      if (!code || code.trim() === finding.code) return;
+      await act(() => api.modifyFinding(finding.id, { code: code.trim(), time_spent_seconds: elapsed() }));
+      return;
+    }
     const raw = window.prompt("Новый объём (мл), оставьте пустым чтобы не менять:");
     if (raw === null) return;
     const measurements = raw.trim() ? { volume_ml: Number(raw) } : undefined;
@@ -72,9 +153,11 @@ export function FindingCard({ finding, onChange }: { finding: FindingOut; onChan
         {finding.coding_system}
         {finding.code ? `: ${finding.code}` : ""} · источник: {finding.source === "model" ? "модель" : "врач"}
       </div>
+      {finding.source === "model" && <Confidence m={finding.measurements} />}
       <div style={{ marginBottom: 10 }}>
-        <Measurements m={finding.measurements} />
+        <Measurements m={finding.measurements} qualitative={(finding.code ?? "").startsWith("CXR-")} />
       </div>
+      {finding.has_heatmap && <HeatmapView finding={finding} />}
       {!decided && (
         <div className="row">
           {/* Активное действие по одной находке (SR-2). */}

@@ -105,6 +105,14 @@ def modify_finding(
     if new_measurements is not None:
         finding.measurements = new_measurements
     if new_code is not None:
+        if new_code.startswith("CXR-"):
+            from app.services.finding_vocabulary import by_code
+
+            concept = by_code(new_code)
+            if concept is None:
+                raise CorrectionError(f"Код {new_code} отсутствует в словаре находок")
+            if new_label is None:
+                new_label = concept.label_ru
         finding.code = new_code
     if new_label is not None:
         finding.label = new_label

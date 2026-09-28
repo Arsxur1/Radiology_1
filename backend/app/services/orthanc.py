@@ -38,6 +38,22 @@ class OrthancClient:
         r.raise_for_status()
         return r.json()
 
+    def series_preview_png(self, series_instance_uid: str) -> bytes | None:
+        """PNG-превью первого снимка серии (рендер Orthanc, с его оконными настройками)."""
+        r = self._client.post("/tools/lookup", content=series_instance_uid)
+        r.raise_for_status()
+        match = next((m for m in r.json() if m.get("Type") == "Series"), None)
+        if match is None:
+            return None
+        r = self._client.get(f"/series/{match['ID']}")
+        r.raise_for_status()
+        instances = sorted(r.json().get("Instances", []))
+        if not instances:
+            return None
+        r = self._client.get(f"/instances/{instances[0]}/preview", headers={"Accept": "image/png"})
+        r.raise_for_status()
+        return r.content
+
     def close(self) -> None:
         self._client.close()
 

@@ -54,3 +54,14 @@ def first_series_object(series_object_prefix: str) -> bytes:
     finally:
         resp.close()
         resp.release_conn()
+
+
+def get_object_ref(ref: str) -> bytes:
+    """Прочитать объект по ссылке вида «бакет/ключ» (как возвращает put_object)."""
+    bucket, _, key = ref.partition("/")
+    resp = get_minio().get_object(bucket, key)
+    try:
+        return resp.read()
+    finally:
+        resp.close()
+        resp.release_conn()

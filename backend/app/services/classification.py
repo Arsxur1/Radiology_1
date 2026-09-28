@@ -59,6 +59,10 @@ class ClassificationModel(ABC):
     def predict(self, series_object_prefix: str) -> ClassificationOutput:
         raise NotImplementedError
 
+    def explain(self, series_object_prefix: str, codes: list[str]) -> dict[str, list[list[float]]]:
+        """Карта значимости по коду (кадр превью). По умолчанию — не поддерживается."""
+        return {}
+
 
 class StubClassificationModel(ClassificationModel):
     """Детерминированная заглушка без GPU и пикселей: для контура и тестов."""
@@ -73,6 +77,11 @@ class StubClassificationModel(ClassificationModel):
             h = hashlib.sha256(f"{series_object_prefix}|{code}|{self.weights_hash}".encode()).hexdigest()
             probs[code] = round(int(h[:8], 16) / 0xFFFFFFFF, 4)
         return ClassificationOutput(probs, {"adapter": "stub"})
+
+    def explain(self, series_object_prefix: str, codes: list[str]) -> dict[str, list[list[float]]]:
+        from app.services.heatmap import stub_grid
+
+        return {c: stub_grid(f"{series_object_prefix}|{c}|{self.weights_hash}") for c in codes}
 
 
 class TorchCXRClassifier(ClassificationModel):  # pragma: no cover - нужен torch и веса
@@ -126,12 +135,35 @@ class TorchCXRClassifier(ClassificationModel):  # pragma: no cover - нужен 
             transforms.ToTensor(),
             transforms.Normalize(IMAGENET_MEAN, IMAGENET_STD),
         ])
+        x = tf(img).unsqueeze(0)
+        self._last = (series_object_prefix, x)
         with torch.no_grad():
-            p = torch.sigmoid(self._model(tf(img).unsqueeze(0)))[0].tolist()
+            p = torch.sigmoid(self._model(x))[0].tolist()
         return ClassificationOutput(
             {c: float(v) for c, v in zip(self.codes, p, strict=True)},
             {"adapter": "densenet121", "image_size": self.image_size},
         )
+
+
+    def explain(self, series_object_prefix: str, codes: list[str]) -> dict[str, list[list[float]]]:
+        """Grad-CAM по последнему блоку признаков DenseNet (features → relu → классификатор)."""
+        import torch
+
+        prefix, x = getattr(self, "_last", (None, None))
+        if prefix != series_object_prefix:
+            self.predict(series_object_prefix)
+            _, x = self._last
+        out: dict[str, list[list[float]]] = {}
+        feats = torch.relu(self._model.features(x)).detach().requires_grad_(True)
+        logits = self._model.classifier(torch.nn.functional.adaptive_avg_pool2d(feats, 1).flatten(1))
+        for code in codes:
+            if code not in self.codes:
+                continue
+            (grad,) = torch.autograd.grad(logits[0, self.codes.index(code)], feats, retain_graph=True)
+            weights = grad.mean(dim=(2, 3), keepdim=True)
+            cam = torch.relu((weights * feats).sum(dim=1))[0]
+            out[code] = cam.tolist()
+        return out
 
 
 @dataclass
@@ -168,7 +200,12 @@ def classify_series(
     model_version: ModelVersion,
     model: ClassificationModel,
     age_years: float | None = None,
+    store_artifact=None,
 ) -> ClassificationOutcome:
+    """store_artifact(key, png_bytes) -> ref — куда сохранить тепловые карты (MinIO).
+
+    Карты строятся только для черновиков, которые увидит врач (не для теневого прогона).
+    """
     if model_version.task != "classification":
         raise WrongModelTask(f"Модель {model_version.name} — {model_version.task}, а не classification")
     study = db.get(Study, series.study_id)
@@ -194,6 +231,15 @@ def classify_series(
     db.add(inference)
     db.flush()
 
+    heatmap_refs: dict[str, str] = {}
+    if drafts and store_artifact is not None and not shadow:
+        from app.services.heatmap import to_png
+
+        prefix = series.object_prefix or series.series_instance_uid
+        for code, grid in model.explain(prefix, [c for c, _, _ in drafts]).items():
+            if grid and grid[0]:
+                heatmap_refs[code] = store_artifact(f"{prefix}/heatmap_{model_version.id}_{code}.png", to_png(grid))
+
     finding_ids: list[uuid.UUID] = []
     for code, p, t in drafts:
         finding = Finding(
@@ -204,6 +250,8 @@ def classify_series(
             label=by_code(code).label_ru,
             # Уверенность — служебная величина для врача; в текст заключения не идёт.
             measurements={"confidence": round(p, 4), "threshold": round(t, 4)},
+            # Тепловая карта — подсказка «куда смотрела модель», не разметка и не измерение.
+            coordinates={"heatmap_ref": heatmap_refs[code]} if code in heatmap_refs else None,
             source=FindingSource.MODEL,
             confirmation_status=ConfirmationStatus.PENDING,
         )

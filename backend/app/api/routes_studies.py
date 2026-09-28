@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.deps import CurrentUser, require_roles
+from app.core.roles import Role
 from app.db.session import get_db
-from app.models.imaging import Study
+from app.models.imaging import Series, Study
 
 router = APIRouter(prefix="/studies", tags=["studies"])
 
@@ -82,3 +84,25 @@ def _to_study_out(study: Study) -> StudyOut:
             for s in study.series
         ],
     )
+
+
+@router.get("/series/{series_id}/preview")
+def series_preview(
+    series_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.RADIOLOGIST, Role.ADMIN, Role.RESEARCHER)),
+) -> Response:
+    """PNG-превью снимка из обезличенного контура (clean-Orthanc) — фон для тепловой карты."""
+    from app.services.orthanc import clean_client
+
+    series = db.get(Series, series_id)
+    if series is None:
+        raise HTTPException(status_code=404, detail="Серия не найдена")
+    client = clean_client()
+    try:
+        png = client.series_preview_png(series.series_instance_uid)
+    finally:
+        client.close()
+    if png is None:
+        raise HTTPException(status_code=404, detail="Снимок серии не найден в хранилище")
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})

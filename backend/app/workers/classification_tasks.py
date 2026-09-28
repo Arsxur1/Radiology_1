@@ -35,7 +35,13 @@ def _load_model(model_version, use_stub: bool):
     )
 
 
-def classify_with_all(db, series: Series, *, use_stub: bool) -> dict:
+def _store_heatmap(key: str, data: bytes) -> str:  # pragma: no cover - нужен MinIO
+    from app.services import storage
+
+    return storage.put_object(get_settings().bucket_masks, key, data, content_type="image/png")
+
+
+def classify_with_all(db, series: Series, *, use_stub: bool, store_artifact=None) -> dict:
     """Прогнать серию через ACTIVE и SHADOW классификаторы. Вынесено для тестов."""
     versions = model_registry.models_for(
         db, task="classification", modality=series.modality,
@@ -49,6 +55,7 @@ def classify_with_all(db, series: Series, *, use_stub: bool) -> dict:
         try:
             out = classification.classify_series(
                 db, series=series, model_version=mv, model=_load_model(mv, use_stub), age_years=age,
+                store_artifact=store_artifact,
             )
             results.append({"model": f"{mv.name}@{mv.semver}", "drafts": len(out.finding_ids),
                             "shadow": out.shadow_run})
@@ -65,7 +72,7 @@ def auto_classify_series(series_id: str, use_stub: bool = True) -> dict:
         series = db.get(Series, uuid.UUID(series_id))
         if series is None:
             return {"skipped": "series_not_found"}
-        result = classify_with_all(db, series, use_stub=use_stub)
+        result = classify_with_all(db, series, use_stub=use_stub, store_artifact=_store_heatmap)
         db.commit()
         return result
     finally:

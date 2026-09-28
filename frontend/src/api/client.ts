@@ -42,6 +42,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return resp.json() as Promise<T>;
 }
 
+/** Бинарный ответ (PNG) с заголовками аутентификации → object URL для <img>. */
+async function requestBlobUrl(path: string): Promise<string> {
+  const resp = await fetch(BASE + path, { headers: { ...authHeaders() } });
+  if (!resp.ok) throw new ApiError(resp.status, resp.statusText);
+  return URL.createObjectURL(await resp.blob());
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -52,6 +59,9 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  seriesPreviewUrl: (seriesId: string) => requestBlobUrl(`/studies/series/${seriesId}/preview`),
+  findingHeatmapUrl: (findingId: string) => requestBlobUrl(`/findings/${findingId}/heatmap`),
+
   listStudies: (modality?: string, patientId?: string) => {
     const q = new URLSearchParams();
     if (modality) q.set("modality", modality);
@@ -74,7 +84,7 @@ export const api = {
 
   modifyFinding: (
     id: string,
-    payload: { measurements?: Record<string, unknown>; label?: string; time_spent_seconds: number },
+    payload: { measurements?: Record<string, unknown>; code?: string; label?: string; time_spent_seconds: number },
   ) =>
     request<FindingOut>(`/findings/${id}/modify`, {
       method: "POST",

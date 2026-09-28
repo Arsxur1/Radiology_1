@@ -35,6 +35,7 @@ export interface FindingOut {
   measurements: Record<string, unknown>;
   source: FindingSource;
   confirmation_status: ConfirmationStatus;
+  has_heatmap: boolean;
 }
 
 export interface ModeOut {

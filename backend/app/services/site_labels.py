@@ -21,7 +21,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.imaging import Series, Study
-from app.models.ml import ConfirmationStatus, Finding, FindingSource, InferenceResult, Report
+from app.models.ml import (
+    ConfirmationStatus,
+    Correction,
+    CorrectionType,
+    Finding,
+    FindingSource,
+    InferenceResult,
+    Report,
+)
 from app.services.finding_vocabulary import list_findings
 
 SITE_DATASET = "ncmc"
@@ -60,6 +68,16 @@ def series_truth(db: Session, series: Series, finalized: set | None = None) -> S
             truth.negatives.add(f.code)
         elif f.source == FindingSource.PHYSICIAN or f.confirmation_status == ConfirmationStatus.CONFIRMED:
             truth.positives.add(f.code)
+    # Врач заменил код находки ИИ: исходный код — ошибка модели, т.е. негатив.
+    fids = [f.id for f in rows]
+    if fids:
+        for c in db.execute(
+            select(Correction).where(Correction.finding_id.in_(fids),
+                                     Correction.correction_type == CorrectionType.MODIFIED)
+        ).scalars():
+            old, new = (c.before or {}).get("code"), (c.after or {}).get("code")
+            if _is_cxr(old) and old != new:
+                truth.negatives.add(old)
     truth.negatives -= truth.positives
     return truth
 

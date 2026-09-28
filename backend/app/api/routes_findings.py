@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -34,6 +34,8 @@ class FindingOut(BaseModel):
     measurements: dict
     source: str
     confirmation_status: str
+    # Есть ли тепловая карта «куда смотрела модель» (GET /findings/{id}/heatmap).
+    has_heatmap: bool = False
 
 
 class ConfirmIn(BaseModel):
@@ -73,6 +75,7 @@ def _out(f: Finding) -> FindingOut:
         measurements=f.measurements,
         source=f.source.value,
         confirmation_status=f.confirmation_status.value,
+        has_heatmap=bool((f.coordinates or {}).get("heatmap_ref")),
     )
 
 
@@ -92,6 +95,39 @@ def list_series_findings(series_id: uuid.UUID, db: Session = Depends(get_db)) ->
     if not model_results_visible(db, modality):
         rows = [f for f in rows if f.source != FindingSource.MODEL]
     return [_out(f) for f in rows]
+
+
+def heatmap_ref_for(db: Session, finding_id: uuid.UUID) -> str:
+    """Ссылка на тепловую карту, если врачу её можно показать; иначе LookupError."""
+    f = db.get(Finding, finding_id)
+    if f is None or f.source != FindingSource.MODEL:
+        raise LookupError("Находка модели не найдена")
+    if f.inference_result is not None and f.inference_result.shadow_run:
+        raise LookupError("Находка модели не найдена")  # теневой прогон не раскрываем
+    series = db.get(Series, f.series_id)
+    if not model_results_visible(db, series.modality if series else None):
+        raise LookupError("Результаты модели в текущем режиме не показываются")
+    ref = (f.coordinates or {}).get("heatmap_ref")
+    if not ref:
+        raise LookupError("Для находки нет тепловой карты")
+    return ref
+
+
+@router.get("/{finding_id}/heatmap")
+def heatmap(
+    finding_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.RADIOLOGIST, Role.ADMIN, Role.RESEARCHER)),
+) -> Response:
+    """PNG «куда смотрела модель» — подсказка, не разметка патологии (SR-1)."""
+    from app.services import storage
+
+    try:
+        ref = heatmap_ref_for(db, finding_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return Response(content=storage.get_object_ref(ref), media_type="image/png",
+                    headers={"Cache-Control": "private, max-age=300"})
 
 
 @router.post("/{finding_id}/confirm", response_model=FindingOut)
