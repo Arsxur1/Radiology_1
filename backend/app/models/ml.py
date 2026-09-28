@@ -148,3 +148,18 @@ class Report(UUIDMixin, TimestampMixin, Base):
     sentence_map: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     language: Mapped[str] = mapped_column(String(8), default="ru", nullable=False)
     finalized_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+
+class AiRefusal(UUIDMixin, TimestampMixin, Base):
+    """Отказ модели по границам применимости (SR-7) — для статистики пилота и дрейфа.
+
+    Результат модели при отказе не пишется; сохраняется только факт и причины.
+    """
+
+    __tablename__ = "ai_refusal"
+
+    series_id: Mapped[uuid.UUID] = mapped_column(GUID(), ForeignKey("series.id"), nullable=False, index=True)
+    model_version_id: Mapped[uuid.UUID] = mapped_column(
+        GUID(), ForeignKey("model_version.id"), nullable=False, index=True
+    )
+    reasons: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)

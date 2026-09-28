@@ -157,3 +157,45 @@ export interface RegistrationOut {
   review_status: RegistrationReview;
   usable_for_measurements: boolean;
 }
+
+export interface PilotDashboard {
+  generated_at: string;
+  weeks: string[];
+  totals: {
+    studies: number;
+    pediatric_studies: number;
+    adult_studies: number;
+    studies_without_age: number;
+    studies_by_modality: Record<string, number>;
+    series_by_modality: Record<string, number>;
+    reports_finalized: number;
+    physician_decisions: number;
+    physician_added_findings: number;
+    ai_refusals: number;
+  };
+  weekly: Record<"studies" | "physician_decisions" | "reports_finalized" | "ai_refusals", number[]>;
+  ai_drafts: {
+    pending: number;
+    confirmed: number;
+    rejected: number;
+    acceptance_rate: number | null;
+    corrections_by_type: Record<string, number>;
+  };
+  refusal_reasons: Record<string, number>;
+  training_data: {
+    records: number;
+    populations: Record<string, number>;
+    finalized: number;
+    skipped_no_age: number;
+    positives: { code: string; label: string; count: number }[];
+    splits: Record<string, number>;
+  };
+  shadow_models: {
+    model_version_id: string;
+    model: string;
+    shadow_runs: number;
+    reviewed_cases: number;
+    disagreement_rate: number | null;
+    miss_rate: number | null;
+  }[];
+}

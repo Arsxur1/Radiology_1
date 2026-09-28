@@ -35,7 +35,7 @@ from app.models.ml import (
 )
 from app.services.applicability import check_applicability
 from app.services.finding_vocabulary import CODING_SYSTEM, by_code
-from app.services.segmentation import ApplicabilityRefused, _series_context
+from app.services.segmentation import ApplicabilityRefused, _series_context, record_refusal
 
 NORMAL_CODE = "CXR-000"
 
@@ -240,6 +240,7 @@ def classify_series(
 
     decision = check_applicability(_series_context(series, study, age_years), model_version.applicability)
     if not decision.admitted:
+        record_refusal(db, series=series, model_version=model_version, reasons=decision.reasons)
         raise ApplicabilityRefused(decision.reasons)
 
     output = model.predict(series.object_prefix or series.series_instance_uid)

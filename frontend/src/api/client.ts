@@ -8,6 +8,7 @@ import type {
   ModelOut,
   OperatingMode,
   PatientOut,
+  PilotDashboard,
   PromotionEvidence,
   PromotionGateResult,
   RegistrationOut,
@@ -59,6 +60,8 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  pilotDashboard: (weeks = 12) => request<PilotDashboard>(`/pilot/dashboard?weeks=${weeks}`),
+
   seriesPreviewUrl: (seriesId: string) => requestBlobUrl(`/studies/series/${seriesId}/preview`),
   findingHeatmapUrl: (findingId: string) => requestBlobUrl(`/findings/${findingId}/heatmap`),
 

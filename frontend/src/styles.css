@@ -30,7 +30,8 @@ a { color: var(--accent); text-decoration: none; }
 .mode-ASSIST { background: #123a24; color: #9be0b4; }
 
 .layout { max-width: 1100px; margin: 0 auto; padding: 16px; }
-.topbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.topbar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.topbar .row { flex-wrap: wrap; }
 .brand { font-weight: 700; }
 
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
@@ -55,3 +56,6 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); }
 input, select { background: #0f1216; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 8px; }
 .error { color: var(--rejected); font-size: 13px; }
+
+/* Широкие таблицы прокручиваются внутри карточки, а не всей страницей. */
+.table-scroll { overflow-x: auto; max-width: 100%; }

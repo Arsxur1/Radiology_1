@@ -42,6 +42,14 @@ class ApplicabilityRefused(Exception):
         self.reasons = reasons
 
 
+def record_refusal(db: Session, *, series: Series, model_version: ModelVersion, reasons: list[str]) -> None:
+    """Зафиксировать факт отказа (без результата модели). Коммит — за вызывающим."""
+    from app.models.ml import AiRefusal
+
+    db.add(AiRefusal(series_id=series.id, model_version_id=model_version.id, reasons=list(reasons)))
+    db.flush()
+
+
 @dataclass
 class SegmentationOutcome:
     inference_result_id: uuid.UUID
@@ -107,6 +115,7 @@ def segment_series(
         _series_context(series, study, age_years), model_version.applicability
     )
     if not decision.admitted:
+        record_refusal(db, series=series, model_version=model_version, reasons=decision.reasons)
         raise ApplicabilityRefused(decision.reasons)
 
     # 2. Инференс.

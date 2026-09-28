@@ -76,6 +76,7 @@ def run_segmentation(
         db.rollback()
         raise HTTPException(status_code=503, detail=f"Модель недоступна: {e}") from e
     except ApplicabilityRefused as e:
+        db.commit()  # факт отказа сохраняется (SR-7), результата нет
         # SR-7: явный отказ с причиной, а не результат «с пониженной уверенностью».
         raise HTTPException(
             status_code=422,

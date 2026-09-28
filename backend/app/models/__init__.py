@@ -4,6 +4,7 @@ from app.models.audit import AuditAction, AuditLog, OperatingModeState
 from app.models.drift import DataDriftMetric
 from app.models.imaging import Series, Study
 from app.models.ml import (
+    AiRefusal,
     ConfirmationStatus,
     Correction,
     CorrectionType,
@@ -22,6 +23,7 @@ from app.models.registration import (
 )
 
 __all__ = [
+    "AiRefusal",
     "Patient",
     "PatientIdentifier",
     "Study",

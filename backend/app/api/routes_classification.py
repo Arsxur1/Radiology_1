@@ -64,6 +64,7 @@ def run_classification(
     except WrongModelTask as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     except ApplicabilityRefused as e:
+        db.commit()  # факт отказа сохраняется (SR-7), результата нет
         raise HTTPException(status_code=422, detail={"refused": True, "reasons": e.reasons}) from e
     return ClassifyResponse(
         inference_result_id=out.inference_result_id, finding_ids=out.finding_ids, shadow_run=out.shadow_run,

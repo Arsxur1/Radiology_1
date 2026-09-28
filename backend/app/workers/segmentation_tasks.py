@@ -69,6 +69,7 @@ def auto_segment_series(series_id: str) -> dict:
         except ApplicabilityRefused as e:
             # SR-7: явный отказ, результат не пишется.
             logger.info("Серия %s вне границ применимости: %s", series_id, e.reasons)
+            db.commit()  # сохраняем факт отказа для статистики (результата нет)
             return {"refused": True, "reasons": e.reasons}
         except (NotImplementedError, OSError, RuntimeError) as e:
             # Модель недоступна — черновиков нет, просмотр не страдает (SR-4).

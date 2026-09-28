@@ -10,6 +10,7 @@ import { Login } from "./pages/Login";
 import { ModalityRegistration } from "./pages/ModalityRegistration";
 import { PatientDynamics } from "./pages/PatientDynamics";
 import { Patients } from "./pages/Patients";
+import { PilotDashboard } from "./pages/PilotDashboard";
 import { StudyReview } from "./pages/StudyReview";
 import { Worklist } from "./pages/Worklist";
 
@@ -42,6 +43,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <span className="row">
           {hasRole("admin", "radiologist") && <Link to="/patients">Пациенты</Link>}
           {hasRole("admin") && <Link to="/admin">Администрирование</Link>}
+          {hasRole("admin", "auditor") && <Link to="/pilot">Пилот</Link>}
           {hasRole("admin", "auditor") && <Link to="/drift">Дрейф</Link>}
           <button
             onClick={() => {
@@ -104,6 +106,14 @@ export default function App() {
         element={
           <RequireAuth>
             <Admin />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/pilot"
+        element={
+          <RequireAuth>
+            <PilotDashboard />
           </RequireAuth>
         }
       />
