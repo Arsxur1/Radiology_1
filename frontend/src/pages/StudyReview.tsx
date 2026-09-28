@@ -71,6 +71,14 @@ export function StudyReview() {
       <p className="row spread">
         <Link to="/">← К списку</Link>
         <span className="row">
+          {/* OHIF (MPR, окна, измерения) — на том же сервере, порт 3000; UID псевдонимный. */}
+          <a
+            href={`${window.location.protocol}//${window.location.hostname}:3000/viewer?StudyInstanceUIDs=${study.study_instance_uid}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Открыть в просмотрщике ↗
+          </a>
           <Link to={`/patients/${study.patient_id}/dynamics`}>Динамика пациента →</Link>
           <Link to={`/patients/${study.patient_id}/registration`}>Совмещение модальностей →</Link>
         </span>

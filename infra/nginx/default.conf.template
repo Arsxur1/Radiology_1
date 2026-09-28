@@ -1,0 +1,44 @@
+# Шлюз medviz: одна точка входа для рабочих мест врачей в сети клиники.
+#   /            — рабочее место врача (React)
+#   /api/        — backend (FastAPI)
+#   /dicom-web/  — обезличенный Orthanc (DICOMweb для OHIF); пароль подставляет шлюз
+# Идентифицирующий контур (orthanc-raw, postgres-idmap) через шлюз НЕ доступен.
+server {
+    listen 80;
+    server_name _;
+    client_max_body_size 200m;
+
+    root /usr/share/nginx/html;
+
+    location / {
+        try_files $uri /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://backend:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 120s;
+    }
+
+    # Только чтение обезличенных данных для OHIF (он открыт на :3000 — другой origin).
+    location /dicom-web/ {
+        limit_except GET OPTIONS { deny all; }
+        if ($request_method = OPTIONS) {
+            add_header Access-Control-Allow-Origin $http_origin;
+            add_header Access-Control-Allow-Headers "Accept, Authorization, Content-Type";
+            add_header Access-Control-Allow-Methods "GET, OPTIONS";
+            return 204;
+        }
+        add_header Access-Control-Allow-Origin $http_origin always;
+        proxy_set_header Authorization "Basic ${ORTHANC_BASIC_AUTH}";
+        proxy_pass http://orthanc-clean:8042/dicom-web/;
+    }
+
+    location /wado {
+        limit_except GET { deny all; }
+        add_header Access-Control-Allow-Origin $http_origin always;
+        proxy_set_header Authorization "Basic ${ORTHANC_BASIC_AUTH}";
+        proxy_pass http://orthanc-clean:8042/wado;
+    }
+}

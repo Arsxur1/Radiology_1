@@ -161,12 +161,35 @@ services:
       - worker
     command: python -m app.workers.orthanc_watcher
 
+  # ─── Шлюз: рабочее место врача + API + DICOMweb на одном адресе (:80) ──────
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      ORTHANC_USERNAME: ${ORTHANC_USERNAME}
+      ORTHANC_PASSWORD: ${ORTHANC_PASSWORD}
+    volumes:
+      - ./infra/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./infra/nginx/15-orthanc-auth.envsh:/docker-entrypoint.d/15-orthanc-auth.envsh:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - orthanc-clean
+
   # ─── Просмотрщик ──────────────────────────────────────────────────────────
   ohif:
     image: ohif/app:latest
     restart: unless-stopped
+    # entrypoint образа пересжимает и перезаписывает app-config.js — с файлом,
+    # смонтированным только на чтение, это даёт ошибки записи. Поэтому наш файл
+    # монтируется отдельно и копируется перед штатным entrypoint.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - cp /medviz/ohif.js /usr/share/nginx/html/app-config.js && exec /usr/src/entrypoint.sh nginx -g 'daemon off;'
     volumes:
-      - ./frontend/config/ohif.js:/usr/share/nginx/html/app-config.js:ro
+      - ./frontend/config/ohif.js:/medviz/ohif.js:ro
     ports:
       - "3000:80"
     depends_on:

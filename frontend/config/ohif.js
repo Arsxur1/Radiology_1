@@ -1,36 +1,52 @@
 /**
- * Конфигурация OHIF Viewer (ТЗ, раздел 4: OHIF на Cornerstone3D).
- * Источник данных — обезличенный Orthanc (clean) через DICOMweb.
- * Осевые/коронарные/сагиттальные проекции, MPR, объёмный рендер, оконные пресеты.
+ * Конфигурация OHIF Viewer v3 (ТЗ, раздел 4: OHIF на Cornerstone3D).
+ * Источник данных — обезличенный Orthanc (clean) через DICOMweb шлюза medviz.
+ * MPR, объёмный рендер, оконные пресеты, измерения — штатные режимы OHIF.
+ *
+ * Адреса вычисляются от хоста, с которого открыт OHIF: на ПК врача «localhost»
+ * указывал бы на его же компьютер. Шлюз (:80) сам авторизуется в clean-Orthanc,
+ * поэтому пароль Orthanc в браузер не попадает.
  */
+var MEDVIZ_GATEWAY = window.location.protocol + '//' + window.location.hostname;
+
 window.config = {
+  name: 'medviz',
   routerBasename: '/',
+  // Обязательные ключи v3: пустые списки — стандартные расширения и режимы образа.
+  extensions: [],
+  modes: [],
+  customizationService: {},
   showStudyList: true,
-  // На этапе 1 виден только обезличенный контур.
+  maxNumberOfWebWorkers: 3,
+  showWarningMessageForCrossOrigin: false,
+  showCPUFallbackMessage: true,
+  showLoadingIndicator: true,
+  strictZSpacingForVolumeViewport: true,
+  maxNumRequests: { interaction: 100, thumbnail: 5, prefetch: 25 },
+  showErrorDetails: 'always',
+  defaultDataSourceName: 'medviz',
   dataSources: [
     {
-      friendlyName: 'medviz (обезличенный)',
       namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
-      sourceName: 'dicomweb',
+      sourceName: 'medviz',
       configuration: {
+        friendlyName: 'medviz (обезличенный контур)',
         name: 'orthanc-clean',
-        wadoUriRoot: 'http://localhost:8043/wado',
-        qidoRoot: 'http://localhost:8043/dicom-web',
-        wadoRoot: 'http://localhost:8043/dicom-web',
-        qidoSupportsIncludeField: true,
-        supportsReject: false,
+        wadoUriRoot: MEDVIZ_GATEWAY + '/wado',
+        qidoRoot: MEDVIZ_GATEWAY + '/dicom-web',
+        wadoRoot: MEDVIZ_GATEWAY + '/dicom-web',
+        qidoSupportsIncludeField: false,
+        imageRendering: 'wadors',
+        thumbnailRendering: 'wadors',
+        enableStudyLazyLoad: true,
         supportsFuzzyMatching: false,
         supportsWildcard: true,
+        // Только чтение: шлюз всё равно запрещает запись в DICOMweb.
+        dicomUploadEnabled: false,
+        supportsReject: false,
         omitQuotationForMultipartRequest: true,
+        bulkDataURI: { enabled: true },
       },
     },
   ],
-  defaultDataSourceName: 'dicomweb',
-  // Баннер напоминает: не для клинического применения на этапе RESEARCH.
-  whiteLabeling: {
-    createLogoComponentFn: function () {
-      return null;
-    },
-  },
-  i18n: { defaultLanguage: 'ru' },
 };

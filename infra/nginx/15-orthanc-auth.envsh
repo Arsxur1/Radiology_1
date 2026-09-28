@@ -1,0 +1,5 @@
+#!/bin/sh
+# Учётные данные clean-Orthanc подставляются шлюзом на стороне сервера:
+# браузер врача пароль Orthanc не видит. Файл *.envsh «источается» entrypoint'ом nginx.
+ORTHANC_BASIC_AUTH="$(printf '%s:%s' "$ORTHANC_USERNAME" "$ORTHANC_PASSWORD" | base64 | tr -d '\n')"
+export ORTHANC_BASIC_AUTH
