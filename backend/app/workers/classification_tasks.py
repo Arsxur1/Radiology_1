@@ -54,6 +54,10 @@ def classify_with_all(db, series: Series, *, store_artifact=None) -> dict:
         except ModelUnavailable as e:
             logger.error("Модель недоступна, черновики не созданы: %s", e)
             results.append({"model": f"{mv.name}@{mv.semver}", "error": str(e)})
+        except Exception as e:  # noqa: BLE001 - сбой одной модели не мешает остальным (SR-4)
+            db.rollback()
+            logger.exception("Сбой модели классификации %s", mv.name)
+            results.append({"model": f"{mv.name}@{mv.semver}", "error": f"{type(e).__name__}: {e}"})
     return {"results": results}
 
 

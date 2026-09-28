@@ -20,9 +20,7 @@ from app.models.imaging import Series
 from app.models.ml import ModelStatus, ModelVersion
 from app.services import segmentation
 from app.services.classification import is_demo_weights
-from app.services.inference_adapters import StubSegmentationModel
 from app.services.segmentation import ApplicabilityRefused
-from app.services.structure_catalog import structures_for_region
 
 router = APIRouter(prefix="/segmentation", tags=["segmentation"])
 
@@ -58,13 +56,10 @@ def run_segmentation(
 
     if req.use_stub and not is_demo_weights(model_version.weights_hash):
         raise HTTPException(status_code=409, detail="Заглушка допустима только для демо-моделей")
-    if req.use_stub:
-        keys = [s.key for s in structures_for_region("CHEST")]
-        model = StubSegmentationModel(keys, weights_hash=model_version.weights_hash)
-    else:  # pragma: no cover
-        from app.services.inference_adapters import TotalSegmentatorAdapter
-
-        model = TotalSegmentatorAdapter(weights_hash=model_version.weights_hash)
+    try:
+        model = segmentation.load_segmentation_model(model_version, series)
+    except segmentation.SegmentationUnavailable as e:
+        raise HTTPException(status_code=503, detail=f"Модель недоступна: {e}") from e
 
     try:
         outcome = segmentation.segment_series(

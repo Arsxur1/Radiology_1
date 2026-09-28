@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     # Удалять исходник с PHI из orthanc-raw после успешного обезличивания (минимизация
     # данных, SR-9). Оригинал остаётся в PACS клиники — источник истины там.
     raw_delete_after_ingest: bool = Field(True, alias="RAW_DELETE_AFTER_INGEST")
+    # Автоанализ стартует через столько секунд после последнего среза серии.
+    analysis_delay_seconds: int = Field(20, alias="ANALYSIS_DELAY_SECONDS")
     ingest_watch_dir: str = Field("/data/ingest", alias="INGEST_WATCH_DIR")
 
     # Аутентификация OIDC (Keycloak)

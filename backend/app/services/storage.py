@@ -65,3 +65,23 @@ def get_object_ref(ref: str) -> bytes:
     finally:
         resp.close()
         resp.release_conn()
+
+
+def series_objects(series_object_prefix: str) -> list[bytes]:
+    """Все DICOM-объекты серии (для объёмных моделей КТ/МРТ)."""
+    s = get_settings()
+    client = get_minio()
+    keys = sorted(
+        o.object_name
+        for o in client.list_objects(s.bucket_images, prefix=f"{series_object_prefix}/", recursive=True)
+        if o.object_name.endswith(".dcm")
+    )
+    out = []
+    for key in keys:
+        resp = client.get_object(s.bucket_images, key)
+        try:
+            out.append(resp.read())
+        finally:
+            resp.close()
+            resp.release_conn()
+    return out

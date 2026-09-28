@@ -33,6 +33,8 @@ class SegmentationOutput:
     structures: list[StructureResult]
     preprocessing_params: dict = field(default_factory=dict)
     extra_metrics: dict = field(default_factory=dict)
+    # Шаг сетки маски (мм) — если адаптер его знает, измерения считаются по нему.
+    spacing_mm: tuple[float, float, float] | None = None
 
 
 class SegmentationModel(ABC):
@@ -48,26 +50,119 @@ class SegmentationModel(ABC):
         raise NotImplementedError
 
 
-class TotalSegmentatorAdapter(SegmentationModel):
-    """Адаптер TotalSegmentator (подключается на GPU-стенде).
+# Структуры каталога, собираемые из нескольких классов TotalSegmentator.
+TS_GROUPS: dict[str, tuple[str, ...]] = {
+    "vertebrae_thoracic": tuple(f"vertebrae_T{i}" for i in range(1, 13)),
+    "vertebrae_lumbar": tuple(f"vertebrae_L{i}" for i in range(1, 6)),
+}
 
-    Реализация загружает серию из объектного хранилища, прогоняет модель и
-    отдаёт маски + воксельную статистику. Здесь только контур; тело inference
-    заполняется при интеграции (см. VOPROSY-K-TZ.md, п. 34 о лицензиях весов).
+
+def labelmap_structures(labelmap, class_names: dict[int, str], keys: list[str]) -> list[StructureResult]:
+    """Мультиметочная маска → воксельная статистика по структурам каталога (numpy)."""
+    import numpy as np
+
+    by_name = {name: idx for idx, name in class_names.items()}
+    out: list[StructureResult] = []
+    for key in keys:
+        members = TS_GROUPS.get(key, (key,))
+        ids = [by_name[m] for m in members if m in by_name]
+        if not ids:
+            continue
+        mask = np.isin(labelmap, ids)
+        count = int(mask.sum())
+        if count == 0:
+            continue  # структура не попала в поле обзора — находки нет
+        nz = np.nonzero(mask)
+        extent = tuple(int(ax.max() - ax.min() + 1) for ax in nz)
+        out.append(StructureResult(key=key, voxel_count=count, extent_voxels=extent))
+    return out
+
+
+def weights_fingerprint(directory) -> str:
+    """SHA-256 по всем файлам каталога весов (путь + содержимое) — для трассировки SR-5."""
+    import hashlib
+    from pathlib import Path
+
+    root = Path(directory)
+    h = hashlib.sha256()
+    for f in sorted(p for p in root.rglob("*") if p.is_file()):
+        h.update(str(f.relative_to(root)).encode())
+        with f.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+    return h.hexdigest()
+
+
+TS_FAST_DATASET = "Dataset297_TotalSegmentator_total_3mm_1559subj"
+TS_FULL_DATASETS = ("Dataset291", "Dataset292", "Dataset293", "Dataset294", "Dataset295")
+
+
+class TotalSegmentatorAdapter(SegmentationModel):  # pragma: no cover - нужен TotalSegmentator
+    """TotalSegmentator (Apache-2.0, задача total): органы КТ → маска и объёмы.
+
+    fetch_series(prefix) -> list[bytes] — все DICOM-срезы серии (обезличенные, из S3);
+    store_mask(key, bytes) -> ref — куда сохранить мультиметочную маску (NIfTI).
+    Отпечаток каталога весов сверяется с зарегистрированным weights_hash (SR-5).
     """
 
-    def __init__(self, weights_hash: str, semver: str = "0.0.0") -> None:
-        self.name = "totalsegmentator_chest"
-        self.semver = semver
-        self.weights_hash = weights_hash
+    def __init__(self, weights_hash: str, keys: list[str], fetch_series, store_mask=None,
+                 fast: bool = True, device: str = "cpu") -> None:
+        from pathlib import Path
 
-    def infer(  # pragma: no cover
-        self, series_object_prefix: str, spacing: tuple[float, float, float]
-    ) -> SegmentationOutput:
-        # Ленивая загрузка тяжёлых зависимостей — только на стенде.
-        # from totalsegmentator.python_api import totalsegmentator
-        raise NotImplementedError(
-            "TotalSegmentator подключается на стенде с GPU; см. docs/STAGE-2.md"
+        from totalsegmentator.config import get_weights_dir
+
+        self.name = "totalsegmentator_total"
+        self.semver = "2"
+        self.weights_hash = weights_hash
+        self._keys, self._fetch, self._store = keys, fetch_series, store_mask
+        self._fast, self._device = fast, device
+        self.timeout_s = 1800
+        wdir = Path(get_weights_dir())
+        dirs = [wdir / TS_FAST_DATASET] if fast else sorted(
+            d for d in wdir.iterdir() if d.name.startswith(TS_FULL_DATASETS))
+        if not dirs or not all(d.exists() for d in dirs):
+            raise FileNotFoundError(f"Нет весов TotalSegmentator в {wdir} (запустите make totalseg-candidate)")
+        actual = weights_fingerprint(dirs[0]) if fast else "+".join(weights_fingerprint(d) for d in dirs)
+        if actual != weights_hash:
+            raise RuntimeError(f"Отпечаток весов TotalSegmentator не совпадает: {actual} != {weights_hash}")
+
+    def infer(self, series_object_prefix: str, spacing: tuple[float, float, float]) -> SegmentationOutput:
+        import gzip
+        import subprocess
+        import sys
+        import tempfile
+        from pathlib import Path
+
+        import nibabel as nib
+        import numpy as np
+        from totalsegmentator.map_to_binary import class_map
+
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "dicom"
+            src.mkdir()
+            for i, data in enumerate(self._fetch(series_object_prefix)):
+                (src / f"{i:05d}.dcm").write_bytes(data)
+            out_file = Path(tmp) / "seg.nii.gz"
+            cmd = [sys.executable, "-m", "app.workers.totalseg_runner", str(src), str(out_file),
+                   "--device", self._device] + ([] if self._fast else ["--full"])
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout_s)
+            if proc.returncode != 0 or not out_file.exists():
+                raise RuntimeError(f"TotalSegmentator завершился с ошибкой: {proc.stderr[-500:]}")
+            img = nib.load(str(out_file))
+            img = nib.Nifti1Image(np.asarray(img.dataobj), img.affine, img.header)  # в память до удаления tmp
+        labelmap = np.asarray(img.dataobj)
+        zooms = tuple(float(z) for z in img.header.get_zooms()[:3])
+        structures = labelmap_structures(labelmap, class_map["total"], self._keys)
+        ref = None
+        if self._store is not None:
+            key = f"{series_object_prefix}/totalseg_{self.weights_hash[:12]}.nii.gz"
+            ref = self._store(key, gzip.compress(img.to_bytes()))
+        return SegmentationOutput(
+            mask_artifact_ref=ref,
+            structures=structures,
+            preprocessing_params={"adapter": "totalsegmentator", "task": "total", "fast": self._fast,
+                                  "mask_spacing_mm": list(zooms)},
+            spacing_mm=zooms,
         )
 
 

@@ -1,7 +1,7 @@
 """Автоматическая сегментация после приёма (ТЗ, FR-3).
 
-Задача выбирает активную модель для модальности/области, применяет гейт SR-7 и
-порождает находки (source=model, pending). Отказ по границам применимости —
+Задача прогоняет серию через действующие модели и кандидатов (теневой прогон),
+применяет гейт SR-7 и порождает находки (source=model, pending). Отказ по границам применимости —
 штатный исход: результат не пишется, причина логируется/аудируется.
 
 На стенде без GPU используется детерминированная заглушка; реальный адаптер
@@ -16,66 +16,59 @@ import uuid
 
 from app.db.session import SessionLocal
 from app.models.imaging import Series
+from app.models.ml import ModelStatus
 from app.services import model_registry, segmentation
-from app.services.classification import is_demo_weights
-from app.services.inference_adapters import StubSegmentationModel
-from app.services.segmentation import ApplicabilityRefused
-from app.services.structure_catalog import region_for_study, structures_for_region
+from app.services.segmentation import ApplicabilityRefused, SegmentationUnavailable
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
 
+def segment_with_all(db, series: Series) -> dict:
+    """Прогнать серию через ACTIVE и SHADOW модели сегментации. Вынесено для тестов.
+
+    SHADOW — теневой прогон кандидата: находки пишутся с shadow_run=True и врачу не видны.
+    Отказ по SR-7 и недоступность модели — штатные исходы по каждой модели отдельно.
+    """
+    versions = model_registry.models_for(
+        db, task="segmentation", modality=series.modality,
+        statuses=(ModelStatus.ACTIVE, ModelStatus.SHADOW),
+    )
+    if not versions:
+        return {"skipped": "no_segmentation_model"}
+    age = series.study.patient_age_years if series.study else None
+    results = []
+    for mv in versions:
+        tag = f"{mv.name}@{mv.semver}"
+        try:
+            model = segmentation.load_segmentation_model(mv, series)
+            out = segmentation.segment_series(db, series=series, model_version=mv, model=model, age_years=age)
+            db.commit()
+            results.append({"model": tag, "structures": out.structure_count,
+                            "shadow": mv.status == ModelStatus.SHADOW})
+        except ApplicabilityRefused as e:
+            db.commit()  # факт отказа сохраняется (SR-7), результата нет
+            logger.info("Серия %s вне границ применимости %s: %s", series.id, tag, e.reasons)
+            results.append({"model": tag, "refused": e.reasons})
+        except (SegmentationUnavailable, NotImplementedError, OSError, RuntimeError) as e:
+            db.rollback()
+            logger.error("Модель сегментации %s недоступна, находок нет: %s", tag, e)
+            results.append({"model": tag, "error": str(e)})
+        except Exception as e:  # noqa: BLE001 - сбой одной модели не мешает остальным (SR-4)
+            db.rollback()
+            logger.exception("Сбой модели сегментации %s", tag)
+            results.append({"model": tag, "error": f"{type(e).__name__}: {e}"})
+    return {"results": results}
+
+
 @celery_app.task(name="segmentation.auto_segment_series")
 def auto_segment_series(series_id: str) -> dict:
-    """Автоматически сегментировать серию активной моделью, если она есть."""
+    """Автосегментация после приёма: действующие модели и теневой прогон кандидатов."""
     db = SessionLocal()
     try:
         series = db.get(Series, uuid.UUID(series_id))
         if series is None:
             return {"skipped": "series_not_found"}
-
-        # Только модели сегментации, заявленные для модальности серии.
-        candidates = model_registry.models_for(db, task="segmentation", modality=series.modality)
-        model_version = candidates[0] if candidates else None
-        if model_version is None:
-            # Нет допущенной модели — контур просмотра/приёма не страдает (SR-4).
-            return {"skipped": "no_active_model"}
-
-        # Заглушка — только для демо-весов: на продуктивном сервере фиктивных находок нет.
-        if is_demo_weights(model_version.weights_hash):
-            # Область определяется по протоколу исследования (грудь/живот/мозг).
-            study = series.study
-            region = region_for_study(
-                study.body_part if study else None,
-                study.protocol if study else None, study.description if study else None,
-            ) or "CHEST"
-            keys = [s.key for s in structures_for_region(region)]
-            model = StubSegmentationModel(keys, weights_hash=model_version.weights_hash)
-        else:  # pragma: no cover
-            from app.services.inference_adapters import TotalSegmentatorAdapter
-
-            model = TotalSegmentatorAdapter(weights_hash=model_version.weights_hash)
-
-        # Возраст пациента нужен для границ применимости (SR-7).
-        age_years = series.study.patient_age_years if series.study else None
-
-        try:
-            outcome = segmentation.segment_series(
-                db, series=series, model_version=model_version, model=model,
-                age_years=age_years,
-            )
-            db.commit()
-            return {"structure_count": outcome.structure_count}
-        except ApplicabilityRefused as e:
-            # SR-7: явный отказ, результат не пишется.
-            logger.info("Серия %s вне границ применимости: %s", series_id, e.reasons)
-            db.commit()  # сохраняем факт отказа для статистики (результата нет)
-            return {"refused": True, "reasons": e.reasons}
-        except (NotImplementedError, OSError, RuntimeError) as e:
-            # Модель недоступна — черновиков нет, просмотр не страдает (SR-4).
-            db.rollback()
-            logger.error("Модель сегментации %s недоступна: %s", model_version.name, e)
-            return {"error": str(e)}
+        return segment_with_all(db, series)
     finally:
         db.close()

@@ -50,6 +50,44 @@ def record_refusal(db: Session, *, series: Series, model_version: ModelVersion, 
     db.flush()
 
 
+class SegmentationUnavailable(Exception):
+    """Модель сегментации не загружается (нет весов/библиотеки, не совпал отпечаток)."""
+
+
+def region_keys(series: Series) -> list[str]:
+    from app.services.structure_catalog import region_for_study, structures_for_region
+
+    study = series.study
+    region = region_for_study(
+        study.body_part if study else None, study.protocol if study else None,
+        study.description if study else None,
+    ) or "CHEST"
+    return [s.key for s in structures_for_region(region)]
+
+
+def load_segmentation_model(model_version: ModelVersion, series: Series):
+    """Заглушка — только для демо-весов; иначе TotalSegmentator (SR-4: при ошибке — без находок)."""
+    from app.services.classification import is_demo_weights
+    from app.services.inference_adapters import StubSegmentationModel
+
+    keys = region_keys(series)
+    if is_demo_weights(model_version.weights_hash):
+        return StubSegmentationModel(keys, weights_hash=model_version.weights_hash)
+    try:  # pragma: no cover - нужен TotalSegmentator и веса
+        from app.core.config import get_settings
+        from app.services import storage
+        from app.services.inference_adapters import TotalSegmentatorAdapter
+
+        def store_mask(key: str, data: bytes) -> str:
+            return storage.put_object(get_settings().bucket_masks, key, data, content_type="application/gzip")
+
+        adapter = model_version.adapter or {}
+        return TotalSegmentatorAdapter(model_version.weights_hash, keys, storage.series_objects, store_mask,
+                                       fast=bool(adapter.get("fast", True)))
+    except (ImportError, OSError, RuntimeError) as e:
+        raise SegmentationUnavailable(f"{model_version.name}@{model_version.semver}: {e}") from e
+
+
 @dataclass
 class SegmentationOutcome:
     inference_result_id: uuid.UUID
@@ -124,6 +162,10 @@ def segment_series(
         series.object_prefix or series.series_instance_uid,
         (spacing.x_mm, spacing.y_mm, spacing.z_mm),
     )
+
+    # Шаг сетки маски, если адаптер его вернул (надёжнее метаданных серии).
+    if output.spacing_mm:
+        spacing = VoxelSpacing(*output.spacing_mm)
 
     # 3. Трассируемый результат (SR-5).
     inference = InferenceResult(

@@ -58,6 +58,8 @@
 
 - [ ] **ИТ** `.env`: `WORKER_EXTRAS=[infer]`, `docker compose build worker`, `make xrv-candidate`.
 - [ ] **Админ** Зарегистрировать `models/xrv_all-*.registration.json` → SHADOW.
+- [ ] **ИТ** `make totalseg-candidate` → зарегистрировать `models/totalseg_ct_fast-*.registration.json`:
+      сегментация органов КТ (~1 мин на исследование на CPU) в теневом прогоне.
 - [ ] **Админ** Через 4–6 недель: «Калибровка по площадке» → новый кандидат с порогами NCMC.
       Подробности и ограничения — `TRAINING.md`, раздел 7.
 

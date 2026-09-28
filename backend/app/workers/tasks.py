@@ -32,6 +32,31 @@ def _drop_raw(raw, raw_instance_id: str, enabled: bool) -> bool:
         return False
 
 
+def _schedule_analysis(series_id: str, settings) -> None:
+    from app.workers import analysis_debounce
+
+    store = analysis_debounce.RedisStore(settings.redis_url)
+    analysis_debounce.schedule(
+        store, series_id,
+        lambda sid, token: analyze_series.apply_async((sid, token), countdown=settings.analysis_delay_seconds),
+    )
+
+
+@celery_app.task(name="ingest.analyze_series")
+def analyze_series(series_id: str, token: str) -> dict:
+    """Автоанализ серии (FR-3): сегментация и классификация. No-op без подходящих моделей."""
+    from app.workers import analysis_debounce
+
+    if not analysis_debounce.is_last(analysis_debounce.RedisStore(get_settings().redis_url), series_id, token):
+        return {"skipped": "newer_instance_arrived"}
+    from app.workers.classification_tasks import auto_classify_series
+    from app.workers.segmentation_tasks import auto_segment_series
+
+    auto_segment_series.delay(series_id)
+    auto_classify_series.delay(series_id)
+    return {"scheduled": series_id}
+
+
 @celery_app.task(name="ingest.process_raw_instance", bind=True, max_retries=3)
 def process_raw_instance(self, raw_instance_id: str) -> dict:
     """Обработать один инстанс из raw-Orthanc: обезличить и зеркалировать.
@@ -72,14 +97,8 @@ def process_raw_instance(self, raw_instance_id: str) -> dict:
             )
             db.commit()
             _drop_raw(raw, raw_instance_id, settings.raw_delete_after_ingest)
-            # Автоанализ после приёма (FR-3): сегментация и классификация находок.
-            # No-op, если для модальности нет подходящей модели.
-            if not outcome.duplicate:
-                from app.workers.classification_tasks import auto_classify_series
-                from app.workers.segmentation_tasks import auto_segment_series
-
-                auto_segment_series.delay(str(outcome.series_id))
-                auto_classify_series.delay(str(outcome.series_id))
+            # Автоанализ — когда серия пришла целиком: каждый срез переносит запуск.
+            _schedule_analysis(str(outcome.series_id), settings)
             return {
                 "series_id": str(outcome.series_id),
                 "duplicate": outcome.duplicate,

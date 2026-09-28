@@ -137,6 +137,8 @@ services:
       - ingest_data:/data/ingest
       # Веса моделей: <weights_hash>.pt, только чтение (хеш сверяется при загрузке).
       - ./models:/data/models:ro
+      # Веса TotalSegmentator (скачиваются make totalseg-candidate, отпечаток сверяется).
+      - totalseg_weights:/root/.totalsegmentator
     command: celery -A app.workers.celery_app worker --loglevel=INFO
 
   # ─── Наблюдатель за сетевой папкой (FR-1, резервный путь приёма) ───────────
@@ -196,6 +198,7 @@ services:
       - orthanc-clean
 
 volumes:
+  totalseg_weights:
   pg_data:
   pg_idmap_data:
   minio_data:

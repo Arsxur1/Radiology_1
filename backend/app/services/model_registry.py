@@ -137,10 +137,15 @@ def register_candidate(
     """Зарегистрировать модель-кандидата. Всегда стартует в SHADOW (раздел 2)."""
     adapter = adapter or {}
     if adapter:
-        if adapter.get("type") != "xrv" or task != "classification":
-            raise PromotionError("Поддерживается только адаптер xrv для модели классификации")
-        if adapter.get("weights") not in XRV_WEIGHTS:
-            raise PromotionError(f"Неизвестные веса xrv: {adapter.get('weights')!r}")
+        kind = adapter.get("type")
+        if kind == "xrv" and task == "classification":
+            if adapter.get("weights") not in XRV_WEIGHTS:
+                raise PromotionError(f"Неизвестные веса xrv: {adapter.get('weights')!r}")
+        elif kind == "totalsegmentator" and task == "segmentation":
+            if adapter.get("task", "total") != "total":
+                raise PromotionError("Поддерживается только открытая задача TotalSegmentator «total»")
+        else:
+            raise PromotionError("Адаптер: xrv — для классификации, totalsegmentator — для сегментации")
     if task not in MODEL_TASKS:
         raise PromotionError(f"Неизвестный тип модели {task!r}; допустимо: {', '.join(MODEL_TASKS)}")
     if task == "classification":
