@@ -21,6 +21,7 @@ from app.api import (
     routes_segmentation,
     routes_studies,
     routes_temporal,
+    routes_vocabulary,
 )
 from app.core.config import get_settings
 
@@ -58,6 +59,7 @@ app.include_router(routes_reports.router)
 app.include_router(routes_pacs.router)
 app.include_router(routes_patients.router)
 app.include_router(routes_registration.router)
+app.include_router(routes_vocabulary.router)
 
 
 @app.get("/")
