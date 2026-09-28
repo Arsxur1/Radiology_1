@@ -30,6 +30,13 @@ dev = [
 pacs = [
     "pynetdicom>=2.0",
 ]
+# Офлайн-контур дообучения (FR-10 п. 3) — ставится ТОЛЬКО на обучающем сервере.
+train = [
+    "torch>=2.2",
+    "torchvision>=0.17",
+    "pillow>=10.0",
+    "numpy>=1.26",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
