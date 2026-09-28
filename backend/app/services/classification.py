@@ -169,6 +169,122 @@ class TorchCXRClassifier(ClassificationModel):  # pragma: no cover - нужен 
 DEMO_WEIGHTS_PREFIXES = ("demo-", "stub-")
 
 
+def dicom_to_float(data: bytes):  # pragma: no cover - нужны numpy/pydicom
+    """DICOM → float-массив с VOI LUT; MONOCHROME1 инвертируется (кости светлые)."""
+    import io
+
+    import numpy as np
+    import pydicom
+
+    try:
+        from pydicom.pixels import apply_voi_lut
+    except ImportError:
+        from pydicom.pixel_data_handlers.util import apply_voi_lut
+    ds = pydicom.dcmread(io.BytesIO(data))
+    arr = ds.pixel_array.astype("float32")
+    try:
+        arr = apply_voi_lut(arr, ds).astype("float32")
+    except Exception:  # noqa: BLE001 - VOI LUT есть не во всех файлах
+        pass
+    if getattr(ds, "PhotometricInterpretation", "") == "MONOCHROME1":
+        arr = arr.max() - arr
+    if arr.ndim == 3:  # многокадровый/цветной — берём первый кадр/яркость
+        arr = arr[0] if arr.shape[0] < arr.shape[-1] else arr.mean(axis=-1)
+    return np.asarray(arr, dtype="float32")
+
+
+def xrv_code_map(pathologies: list[str]) -> dict[int, str]:
+    """Индекс выхода открытой модели → код словаря (диагнозы и неизвестное — отбрасываются)."""
+    from app.training.label_map import map_labels
+
+    report = map_labels([p for p in pathologies if p])
+    return {i: report.mapped[p] for i, p in enumerate(pathologies) if p in report.mapped}
+
+
+class XrvClassifier(ClassificationModel):  # pragma: no cover - нужен torchxrayvision
+    """Открытая предобученная модель TorchXRayVision (DenseNet-121, 224 px).
+
+    Файл весов — MEDVIZ_MODELS_DIR/<weights_hash>.pt, хеш сверяется (SR-5); библиотеке
+    файл подаётся через частный кэш-каталог, поэтому ничего не скачивается при работе.
+    Выходы нормированы порогами авторов (op_threshs): 0.5 — их рабочая точка.
+    """
+
+    def __init__(self, weights_hash: str, models_dir: str, fetch_dicom, weights_name: str) -> None:
+        from pathlib import Path
+
+        import torchxrayvision as xrv
+
+        from app.training.model_card import weights_sha256
+
+        path = Path(models_dir) / f"{weights_hash}.pt"
+        if not path.exists():
+            raise FileNotFoundError(f"Нет файла весов {path}")
+        actual = weights_sha256(path)
+        if actual != weights_hash:
+            raise RuntimeError(f"Хеш весов не совпадает: {actual} != {weights_hash}")
+        info = xrv.models.model_urls[weights_name]
+        cache = Path(models_dir) / ".xrv-cache"
+        try:
+            cache.mkdir(exist_ok=True)
+            link = cache / info["weights_url"].split("/")[-1]
+            if not link.exists():
+                link.symlink_to(path)
+            cache_dir = str(cache)
+        except OSError:  # каталог только на чтение — временный кэш
+            import tempfile
+
+            cache_dir = tempfile.mkdtemp(prefix="xrv-")
+            (Path(cache_dir) / info["weights_url"].split("/")[-1]).symlink_to(path)
+        self._model = xrv.models.DenseNet(weights=weights_name, cache_dir=cache_dir).eval()
+        self._xrv = xrv
+        self._codes = xrv_code_map(list(self._model.pathologies))
+        self._fetch = fetch_dicom
+        self.weights_hash = weights_hash
+        self.weights_name = weights_name
+
+    def _tensor(self, series_object_prefix: str):
+        import torch
+
+        arr = dicom_to_float(self._fetch(series_object_prefix))
+        lo, hi = float(arr.min()), float(arr.max())
+        arr = (arr - lo) / (hi - lo) * 255 if hi > lo else arr * 0
+        img = self._xrv.datasets.normalize(arr, 255)[None, ...]
+        img = self._xrv.datasets.XRayCenterCrop()(img)
+        img = self._xrv.datasets.XRayResizer(224)(img)
+        return torch.from_numpy(img).float().unsqueeze(0)
+
+    def predict(self, series_object_prefix: str) -> ClassificationOutput:
+        import torch
+
+        x = self._tensor(series_object_prefix)
+        self._last = (series_object_prefix, x)
+        with torch.no_grad():
+            out = self._model(x)[0].tolist()
+        probs: dict[str, float] = {}
+        for i, code in self._codes.items():
+            probs[code] = max(probs.get(code, 0.0), float(out[i]))
+        return ClassificationOutput(probs, {"adapter": f"xrv:{self.weights_name}", "image_size": 224})
+
+    def explain(self, series_object_prefix: str, codes: list[str]) -> dict[str, list[list[float]]]:
+        import torch
+        import torch.nn.functional as F
+
+        prefix, x = getattr(self, "_last", (None, None))
+        if prefix != series_object_prefix:
+            x = self._tensor(series_object_prefix)
+        feats = F.relu(self._model.features(x)).detach().requires_grad_(True)
+        logits = self._model.classifier(F.adaptive_avg_pool2d(feats, 1).flatten(1))
+        out: dict[str, list[list[float]]] = {}
+        for code in codes:
+            idx = [i for i, c in self._codes.items() if c == code]
+            if not idx:
+                continue
+            (grad,) = torch.autograd.grad(logits[0, idx].max(), feats, retain_graph=True)
+            cam = torch.relu((grad.mean(dim=(2, 3), keepdim=True) * feats).sum(dim=1))[0]
+            out[code] = cam.tolist()
+        return out
+
+
 class ModelUnavailable(Exception):
     """Веса модели не загружаются (нет файла, не совпал хеш, нет torch)."""
 
@@ -189,8 +305,12 @@ def load_model(model_version: ModelVersion) -> ClassificationModel:
         from app.core.config import get_settings
         from app.services import storage
 
+        adapter = model_version.adapter or {}
+        if adapter.get("type") == "xrv":
+            return XrvClassifier(model_version.weights_hash, get_settings().models_dir,
+                                 storage.first_series_object, adapter["weights"])
         return TorchCXRClassifier(model_version.weights_hash, get_settings().models_dir, storage.first_series_object)
-    except (ImportError, OSError, RuntimeError) as e:
+    except (ImportError, OSError, RuntimeError, KeyError) as e:
         raise ModelUnavailable(f"{model_version.name}@{model_version.semver}: {e}") from e
 
 

@@ -2,6 +2,7 @@
 
 import { authHeaders } from "../auth";
 import type {
+  CalibrationProposal,
   DriftSlice,
   FindingOut,
   ModeOut,
@@ -138,6 +139,9 @@ export const api = {
       body: JSON.stringify({ applicability: {}, ...payload }),
     }),
 
+  calibration: (versionId: string) => request<CalibrationProposal>(`/models/${versionId}/calibration`),
+  calibratedCandidate: (versionId: string) =>
+    request<ModelOut>(`/models/${versionId}/calibrated-candidate`, { method: "POST" }),
   shadowReport: (versionId: string) => request<ShadowReport>(`/models/${versionId}/shadow-report`),
 
   evaluateModel: (candidateId: string, evidence: PromotionEvidence) =>

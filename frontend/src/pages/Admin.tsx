@@ -13,10 +13,75 @@ import type {
   OperatingMode,
   PromotionEvidence,
   PromotionGateResult,
+  CalibrationProposal,
   ShadowReport,
 } from "../api/types";
 
 const pct = (v: number | null) => (v === null ? "—" : `${(v * 100).toFixed(1)}%`);
+
+function CalibrationView({ model, onChanged }: { model: ModelOut; onChanged: () => void }) {
+  const [p, setP] = useState<CalibrationProposal | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const run = async (fn: () => Promise<void>) => {
+    setMsg(null);
+    try {
+      await fn();
+    } catch (e) {
+      setMsg(e instanceof ApiError ? e.message : String(e));
+    }
+  };
+  return (
+    <div style={{ marginTop: 8 }}>
+      <button onClick={() => run(async () => setP(await api.calibration(model.id)))}>Калибровка по площадке</button>
+      {p && (
+        <div style={{ marginTop: 6 }}>
+          <div className="muted">
+            Подписанных случаев для подбора: {p.calibration_cases}; отложено для проверки: {p.held_out_test_cases}.
+            Порог меняется только при ≥5 позитивах и ≥5 негативах.
+          </div>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Код</th>
+                  <th>Позитивов / негативов</th>
+                  <th>Порог сейчас</th>
+                  <th>Предложен</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(p.per_code).map(([code, e]) => (
+                  <tr key={code}>
+                    <td>{code}</td>
+                    <td>
+                      {e.n_pos} / {e.n_neg}
+                    </td>
+                    <td>{e.current}</td>
+                    <td>{e.changed ? <strong>{e.proposed}</strong> : <span className="muted">без изменений</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button
+            className="primary"
+            disabled={p.changed_codes.length === 0}
+            onClick={() =>
+              run(async () => {
+                const m = await api.calibratedCandidate(model.id);
+                setMsg(`Создан кандидат ${m.name} ${m.semver} (SHADOW)`);
+                onChanged();
+              })
+            }
+          >
+            Создать откалиброванного кандидата
+          </button>
+        </div>
+      )}
+      {msg && <div className="muted">{msg}</div>}
+    </div>
+  );
+}
 
 function ShadowReportView({ report }: { report: ShadowReport }) {
   return (
@@ -159,7 +224,9 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
       </div>
       <div className="muted">
         {model.task === "classification"
-          ? `классификация находок: ${Object.keys(model.operating_points).length} кодов с порогами`
+          ? `классификация находок: ${Object.keys(model.operating_points).length} кодов с порогами${
+              model.adapter?.type === "xrv" ? ` · открытая модель ${model.adapter.weights}` : ""
+            }`
           : "сегментация"}
         {" · "}весы: {model.weights_hash}
       </div>
@@ -249,6 +316,10 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
             </div>
           )}
         </div>
+      )}
+
+      {model.task === "classification" && model.status !== "retired" && (
+        <CalibrationView model={model} onChanged={onChanged} />
       )}
 
       {(model.status === "active" || model.status === "retired") && (

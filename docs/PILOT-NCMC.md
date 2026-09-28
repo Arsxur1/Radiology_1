@@ -54,6 +54,13 @@
 - [ ] **ИТ** `.env`: `WORKER_EXTRAS=[infer]`, затем `docker compose build worker && docker compose up -d worker`.
 - [ ] **Админ** Админка → вставить `registration.json` → кандидат в **SHADOW**.
 
+## 2а. Старт теневого прогона без GPU (сразу после подключения PACS)
+
+- [ ] **ИТ** `.env`: `WORKER_EXTRAS=[infer]`, `docker compose build worker`, `make xrv-candidate`.
+- [ ] **Админ** Зарегистрировать `models/xrv_all-*.registration.json` → SHADOW.
+- [ ] **Админ** Через 4–6 недель: «Калибровка по площадке» → новый кандидат с порогами NCMC.
+      Подробности и ограничения — `TRAINING.md`, раздел 7.
+
 ## 3. Теневой прогон (8–12 недель)
 
 Прогресс виден на странице **«Пилот»** (роли admin/auditor): исследования, решения

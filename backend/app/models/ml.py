@@ -57,6 +57,9 @@ class ModelVersion(UUIDMixin, TimestampMixin, Base):
     task: Mapped[str] = mapped_column(String(32), default="segmentation", nullable=False)
     # Пороги по кодам находок, подобранные на валидации: {"CXR-200": {"threshold": 0.4}}.
     operating_points: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # Адаптер инференса: {} — веса нашего обучающего контура; {"type": "xrv", "weights": ...} —
+    # открытая предобученная модель TorchXRayVision (только для теневой оценки на площадке).
+    adapter: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
 
 class InferenceResult(UUIDMixin, TimestampMixin, Base):

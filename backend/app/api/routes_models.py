@@ -36,6 +36,7 @@ class ModelOut(BaseModel):
     applicability: dict
     task: str
     operating_points: dict
+    adapter: dict = {}
 
 
 class RegisterIn(BaseModel):
@@ -45,6 +46,7 @@ class RegisterIn(BaseModel):
     applicability: dict = {}
     task: str = "segmentation"
     operating_points: dict = {}
+    adapter: dict = {}
 
 
 class PromotionEvidenceIn(BaseModel):
@@ -68,7 +70,7 @@ def _out(m: ModelVersion) -> ModelOut:
     return ModelOut(
         id=m.id, name=m.name, semver=m.semver, weights_hash=m.weights_hash,
         status=m.status.value, applicability=m.applicability,
-        task=m.task, operating_points=m.operating_points or {},
+        task=m.task, operating_points=m.operating_points or {}, adapter=m.adapter or {},
     )
 
 
@@ -88,7 +90,7 @@ def register_candidate(
         m = model_registry.register_candidate(
             db, name=payload.name, semver=payload.semver, weights_hash=payload.weights_hash,
             applicability=payload.applicability, actor=user.subject,
-            task=payload.task, operating_points=payload.operating_points,
+            task=payload.task, operating_points=payload.operating_points, adapter=payload.adapter,
         )
     except PromotionError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
@@ -131,6 +133,44 @@ def shadow_report(
         return build(db, version_id)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@router.get("/{version_id}/calibration")
+def calibration(
+    version_id: uuid.UUID,
+    min_pos: int = 5,
+    min_neg: int = 5,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.ADMIN)),
+) -> dict:
+    """Предложение порогов по подписанным заключениям площадки (без изменения модели)."""
+    from app.services.calibration import calibration_proposal
+
+    try:
+        return calibration_proposal(db, version_id, min_pos=min_pos, min_neg=min_neg)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
+@router.post("/{version_id}/calibrated-candidate", response_model=ModelOut)
+def calibrated_candidate(
+    version_id: uuid.UUID,
+    min_pos: int = 5,
+    min_neg: int = 5,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_roles(Role.ADMIN)),
+) -> ModelOut:
+    """Новый кандидат (версия +1, SHADOW) с порогами, откалиброванными на площадке."""
+    from app.services.calibration import CalibrationError, register_calibrated
+
+    try:
+        m = register_calibrated(db, version_id, actor=user.subject, min_pos=min_pos, min_neg=min_neg)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except CalibrationError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    db.commit()
+    return _out(m)
 
 
 @router.post("/{candidate_id}/promote", response_model=ModelOut)

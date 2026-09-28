@@ -67,6 +67,18 @@ export interface ModelOut {
   applicability: Record<string, unknown>;
   task: "segmentation" | "classification";
   operating_points: Record<string, { threshold: number }>;
+  adapter: { type?: string; weights?: string };
+}
+
+export interface CalibrationProposal {
+  model: string;
+  calibration_cases: number;
+  held_out_test_cases: number;
+  changed_codes: string[];
+  per_code: Record<
+    string,
+    { current: number; proposed: number; n_pos: number; n_neg: number; changed: boolean; sensitivity?: number; specificity?: number }
+  >;
 }
 
 export interface ShadowCounts {

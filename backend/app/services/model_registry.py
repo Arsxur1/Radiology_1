@@ -28,6 +28,11 @@ from app.models.ml import ModelStatus, ModelVersion
 from app.services import audit
 
 MODEL_TASKS = ("segmentation", "classification")
+# Открытые предобученные модели TorchXRayVision, допустимые для теневой оценки.
+XRV_WEIGHTS = (
+    "densenet121-res224-all", "densenet121-res224-nih", "densenet121-res224-pc",
+    "densenet121-res224-chex", "densenet121-res224-mimic_nb", "densenet121-res224-mimic_ch",
+)
 
 
 class PromotionError(Exception):
@@ -127,8 +132,15 @@ def register_candidate(
     actor: str,
     task: str = "segmentation",
     operating_points: dict | None = None,
+    adapter: dict | None = None,
 ) -> ModelVersion:
     """Зарегистрировать модель-кандидата. Всегда стартует в SHADOW (раздел 2)."""
+    adapter = adapter or {}
+    if adapter:
+        if adapter.get("type") != "xrv" or task != "classification":
+            raise PromotionError("Поддерживается только адаптер xrv для модели классификации")
+        if adapter.get("weights") not in XRV_WEIGHTS:
+            raise PromotionError(f"Неизвестные веса xrv: {adapter.get('weights')!r}")
     if task not in MODEL_TASKS:
         raise PromotionError(f"Неизвестный тип модели {task!r}; допустимо: {', '.join(MODEL_TASKS)}")
     if task == "classification":
@@ -136,6 +148,7 @@ def register_candidate(
     candidate = ModelVersion(
         task=task,
         operating_points=operating_points or {},
+        adapter=adapter,
         name=name,
         semver=semver,
         weights_hash=weights_hash,

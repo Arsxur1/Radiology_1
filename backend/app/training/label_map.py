@@ -64,6 +64,11 @@ FINDING_MAP: dict[str, str] = {
     "hyperinflation": "CXR-109",
     "bronchiectasis": "CXR-110",
     "situs inversus": "CXR-501",
+    # NIH ChestX-ray14 (в т.ч. выходы открытых моделей TorchXRayVision)
+    "effusion": "CXR-200",
+    "nodule": "CXR-103",
+    "mass": "CXR-104",
+    "fibrosis": "CXR-111",
 }
 
 # Метки уровня заболевания/диагноза — в обучение НЕ идут (SR-1, раздел 8).
