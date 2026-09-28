@@ -69,12 +69,23 @@ def publish_seg_to_viewer(seg_bytes: bytes) -> dict:  # pragma: no cover - ну�
     """Загрузить DICOM SEG в обезличенный Orthanc — OHIF покажет его в исследовании."""
     from app.services.orthanc import clean_client
 
+    import io
+
+    import pydicom
+
+    from app.core.config import get_settings
+    from app.services import storage
+
+    # Копия в S3 — источник истины для пересборки просмотрщика при восстановлении.
+    ds = pydicom.dcmread(io.BytesIO(seg_bytes), stop_before_pixels=True)
+    key = f"seg/{ds.StudyInstanceUID}/{ds.SeriesInstanceUID}/{ds.SOPInstanceUID}.dcm"
+    ref = storage.put_object(get_settings().bucket_masks, key, seg_bytes)
     client = clean_client()
     try:
         r = client.upload_dicom(seg_bytes)
     finally:
         client.close()
-    return {"orthanc_id": r.get("ID"), "series": r.get("ParentSeries")}
+    return {"orthanc_id": r.get("ID"), "series": r.get("ParentSeries"), "s3": ref}
 
 
 def load_segmentation_model(model_version: ModelVersion, series: Series):

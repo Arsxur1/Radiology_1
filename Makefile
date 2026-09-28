@@ -1,4 +1,4 @@
-.PHONY: help up down logs build migrate revision test lint fmt seed backup check-pacs xrv-candidate totalseg-candidate
+.PHONY: help up down logs build migrate revision test lint fmt seed backup check-pacs xrv-candidate totalseg-candidate restore
 
 help:
 	@echo "up         — поднять весь стек (docker compose up -d --build)"
@@ -9,7 +9,8 @@ help:
 	@echo "test       — прогнать тесты backend"
 	@echo "lint       — ruff check"
 	@echo "fmt        — ruff format"
-	@echo "backup     — бэкап PostgreSQL + MinIO"
+	@echo "backup     — бэкап PostgreSQL (оба контура) + S3 + веса моделей"
+	@echo "restore    — восстановление: make restore BACKUP=backups/<дата-время>"
 	@echo "check-pacs — проверить связь с настроенным PACS (.env)"
 	@echo "totalseg-candidate — кандидат сегментации КТ на TotalSegmentator (без GPU, быстрый режим)"
 	@echo "xrv-candidate — кандидат из открытой модели для теневого прогона (без GPU)"
@@ -45,6 +46,10 @@ fmt:
 
 backup:
 	bash scripts/backup.sh
+
+# Восстановление: make restore BACKUP=backups/<дата-время>  (перезаписывает данные!)
+restore:
+	bash scripts/restore.sh $(BACKUP)
 
 check-pacs:
 	bash scripts/check_pacs.sh
