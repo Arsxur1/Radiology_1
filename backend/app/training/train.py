@@ -110,6 +110,27 @@ def _predict(model, loader, device):  # pragma: no cover - нужен torch
     return truths, scores
 
 
+def build_backbone(pretrained: str):  # pragma: no cover - нужен torch
+    """DenseNet-121: веса ImageNet из интернета, из локального файла или без них.
+
+    - "imagenet" — скачать (нужен доступ к download.pytorch.org);
+    - путь к .pth — для серверов без интернета: файл скачивается заранее
+      (https://download.pytorch.org/models/densenet121-a639ec97.pth) и переносится;
+    - "none" — без предобучения: ТОЛЬКО для технической проверки контура, такую модель
+      не регистрировать (ТЗ исключает обучение «с нуля»; карточка это фиксирует).
+    """
+    import torch
+    from torchvision import models
+
+    if pretrained == "imagenet":
+        return models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
+    model = models.densenet121()
+    if pretrained != "none":
+        state = torch.load(pretrained, map_location="cpu")
+        model.load_state_dict(state.get("state_dict", state) if isinstance(state, dict) else state)
+    return model
+
+
 def output_codes(records: list[ManifestRecord]) -> list[str]:
     """Детерминированный порядок выходов: коды, у которых есть хоть один позитив."""
     positive = {c for r in records for c, v in r.labels.items() if v == 1}
@@ -134,6 +155,7 @@ def train(  # pragma: no cover - нужен torch и данные на обуч�
     seed: int = 42,
     age_min: float | None = None,
     age_max: float | None = None,
+    pretrained: str = "imagenet",
 ) -> dict:
     import torch
     from torchvision import models
@@ -155,7 +177,7 @@ def train(  # pragma: no cover - нужен torch и данные на обуч�
     val_loader = dl(_torch_dataset(val_recs, roots, codes, image_size, False),
                     batch_size=batch_size, num_workers=num_workers)
 
-    model = models.densenet121(weights=models.DenseNet121_Weights.DEFAULT)
+    model = build_backbone(pretrained)
     model.classifier = torch.nn.Linear(model.classifier.in_features, len(codes))
     model.to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
@@ -173,7 +195,7 @@ def train(  # pragma: no cover - нужен torch и данные на обуч�
             opt.zero_grad()
             loss.backward()
             opt.step()
-            total += float(loss)
+            total += loss.item()
         truths, scores = _predict(model, val_loader, device)
         per_code = per_code_auroc(codes, truths, scores)
         mean = mean_defined(per_code)
@@ -192,8 +214,13 @@ def train(  # pragma: no cover - нужен torch и данные на обуч�
         datasets=sorted({r.dataset for r in records}), excluded_labels=excluded_labels,
         metrics=best, frozen_digest=frozen.digest, operating_points=ops,
     )
+    card["pretrained"] = pretrained if pretrained in ("imagenet", "none") else f"file:{Path(pretrained).name}"
+    if pretrained == "none":
+        card["intended_use"] = "ТЕХНИЧЕСКАЯ ПРОВЕРКА КОНТУРА. Без предобучения — не регистрировать."
     (out_dir / "model_card.json").write_text(json.dumps(card, ensure_ascii=False, indent=2), "utf-8")
-    (out_dir / "registration.json").write_text(
+    # Модель без предобучения в клинику не идёт: файла для регистрации нет.
+    reg_name = "registration.json" if pretrained != "none" else "registration.CHECK-ONLY.json"
+    (out_dir / reg_name).write_text(
         json.dumps(registration_payload(card), ensure_ascii=False, indent=2), "utf-8")
     (out_dir / "history.json").write_text(json.dumps(history, ensure_ascii=False, indent=2), "utf-8")
     return card

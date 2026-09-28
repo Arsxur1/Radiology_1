@@ -125,7 +125,7 @@ def cmd_train(args) -> dict:  # pragma: no cover - нужен torch
         out_dir=Path(args.out), name=args.name, semver=args.semver,
         excluded_labels=sorted(set(excluded)), epochs=args.epochs, batch_size=args.batch_size,
         lr=args.lr, image_size=args.image_size, num_workers=args.workers,
-        age_min=args.age_min, age_max=args.age_max,
+        age_min=args.age_min, age_max=args.age_max, pretrained=args.pretrained,
     )
     return {"run": args.out, "excluded_leaking_patients": leaked, "card": card}
 
@@ -182,6 +182,8 @@ def build_parser() -> argparse.ArgumentParser:
             s.add_argument("--workers", type=int, default=4)
             s.add_argument("--age-min", type=float)
             s.add_argument("--age-max", type=float)
+            s.add_argument("--pretrained", default="imagenet",
+                           help="imagenet | путь к densenet121-*.pth (офлайн) | none (только проверка)")
         else:
             s.add_argument("--run", required=True)
         s.set_defaults(func=func, needs_contour=True)
