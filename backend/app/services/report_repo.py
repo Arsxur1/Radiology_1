@@ -14,6 +14,35 @@ from app.services import audit
 from app.services.report_draft import FindingInput, build_draft
 
 
+class ReportConflict(Exception):
+    """Заключение нельзя собрать/подписать в текущем состоянии (объяснение — в тексте)."""
+
+
+def _pending_visible_drafts(db: Session, study_id: uuid.UUID) -> list[Finding]:
+    """Черновики находок классификатора без решения врача, которые врач видит.
+
+    Для структур сегментации (анатомия + объёмы) решение по каждой не требуется:
+    неподтверждённые просто не входят в заключение.
+    """
+    from app.models.ml import FindingSource, InferenceResult, ModelVersion
+    from app.services.mode_state import model_results_visible
+
+    rows = db.execute(
+        select(Finding, Series.modality)
+        .join(Series, Finding.series_id == Series.id)
+        .join(InferenceResult, Finding.inference_result_id == InferenceResult.id)
+        .join(ModelVersion, InferenceResult.model_version_id == ModelVersion.id)
+        .where(
+            Series.study_id == study_id,
+            ModelVersion.task == "classification",
+            Finding.source == FindingSource.MODEL,
+            Finding.confirmation_status == ConfirmationStatus.PENDING,
+            InferenceResult.shadow_run.is_(False),
+        )
+    ).all()
+    return [f for f, modality in rows if model_results_visible(db, modality)]
+
+
 def _confirmed_findings_for_study(db: Session, study_id: uuid.UUID) -> list[Finding]:
     return (
         db.execute(
@@ -48,6 +77,8 @@ def generate_report_draft(
     draft = build_draft(inputs, language=language)
 
     report = db.execute(select(Report).where(Report.study_id == study_id)).scalar_one_or_none()
+    if report is not None and report.finalized_by:
+        raise ReportConflict("Заключение уже подписано — изменить его нельзя")
     if report is None:
         report = Report(study_id=study_id)
         db.add(report)
@@ -65,6 +96,17 @@ def finalize_report(
     report = db.get(Report, report_id)
     if report is None:
         raise ValueError("Черновик не найден")
+    if report.finalized_by:
+        raise ReportConflict("Заключение уже подписано")
+    # SR-2: каждый видимый черновик ИИ — активное решение врача (подтвердить/изменить/отклонить).
+    pending = _pending_visible_drafts(db, report.study_id)
+    if pending:
+        names = ", ".join(sorted({f.label or f.code or "находка" for f in pending}))
+        raise ReportConflict(f"Есть черновики ИИ без решения врача ({len(pending)}): {names}")
+    # Черновик должен отражать все подтверждённые находки на момент подписи.
+    confirmed = {str(f.id) for f in _confirmed_findings_for_study(db, report.study_id)}
+    if confirmed != set((report.sentence_map or {}).values()):
+        raise ReportConflict("Находки изменились после сборки черновика — соберите черновик заново")
     report.finalized_by = physician
     db.flush()
     audit.record(

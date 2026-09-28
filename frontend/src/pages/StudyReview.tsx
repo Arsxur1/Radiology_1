@@ -17,6 +17,7 @@ export function StudyReview() {
   const [findings, setFindings] = useState<Record<string, FindingOut[]>>({});
   const [report, setReport] = useState<ReportOut | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const loadFindings = useCallback(async (seriesId: string) => {
     const list = await api.listSeriesFindings(seriesId);
@@ -43,20 +44,22 @@ export function StudyReview() {
 
   async function onGenerateReport() {
     if (!studyId) return;
-    setError(null);
+    setReportError(null);
     try {
       setReport(await api.generateReport(studyId));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : String(e));
+      setReportError(e instanceof ApiError ? e.message : String(e));
     }
   }
 
   async function onFinalize() {
     if (!report) return;
+    setReportError(null);
     try {
       setReport(await api.finalizeReport(report.id));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : String(e));
+      // Напр.: есть черновики ИИ без решения, или находки изменились после сборки.
+      setReportError(e instanceof ApiError ? e.message : String(e));
     }
   }
 
@@ -108,9 +111,11 @@ export function StudyReview() {
         <div className="row spread">
           <strong>Черновик заключения</strong>
           <div className="row">
-            <button onClick={onGenerateReport}>Собрать из подтверждённых находок</button>
-            <button className="primary" disabled={!report} onClick={onFinalize}>
-              Финализировать
+            <button onClick={onGenerateReport} disabled={!!report?.finalized_by}>
+              Собрать из подтверждённых находок
+            </button>
+            <button className="primary" disabled={!report || !!report.finalized_by} onClick={onFinalize}>
+              Подписать
             </button>
           </div>
         </div>
@@ -120,12 +125,14 @@ export function StudyReview() {
               {report.draft_text || "Нет подтверждённых находок для заключения."}
             </p>
             {report.finalized_by && (
-              <div className="muted">Финализировано: {report.finalized_by}</div>
+              <div className="muted">Подписано: {report.finalized_by}</div>
             )}
           </>
         )}
+        {reportError && <div className="error" style={{ marginTop: 8 }}>{reportError}</div>}
         <div className="muted" style={{ marginTop: 8 }}>
-          Заключение формируется только из подтверждённых врачом находок (FR-8).
+          Заключение формируется только из подтверждённых врачом находок (FR-8). Перед подписью
+          примите решение по каждому черновику ИИ.
         </div>
       </section>
     </div>

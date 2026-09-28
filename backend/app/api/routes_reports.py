@@ -55,7 +55,7 @@ def generate(
             db, study_id=payload.study_id, language=payload.language, actor=user.subject,
         )
         db.commit()
-    except UnconfirmedFindingError as e:
+    except (UnconfirmedFindingError, report_repo.ReportConflict) as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     return _out(report)
 
@@ -78,6 +78,8 @@ def finalize(
     try:
         report = report_repo.finalize_report(db, report_id=report_id, physician=user.subject)
         db.commit()
+    except report_repo.ReportConflict as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     return _out(report)

@@ -281,3 +281,24 @@ def test_physician_adds_vocabulary_finding(db):
         corrections.create_physician_finding(db, series_id=series.id, physician="dr", measurements={}, code="CXR-200")
     with pytest.raises(CorrectionError):
         corrections.create_physician_finding(db, series_id=series.id, physician="dr", measurements={}, code="CXR-XXX")
+
+
+def test_finalize_requires_decisions_and_fresh_draft(db):
+    from app.services import report_repo
+    from app.services.report_repo import ReportConflict
+
+    series, mv = _series(db), _model(db)
+    out = classification.classify_series(db, series=series, model_version=mv,
+                                         model=FixedModel({**PROBS, "CXR-500": 0.9}))
+    first, second = out.finding_ids
+    report = report_repo.generate_report_draft(db, study_id=series.study_id)
+    with pytest.raises(ReportConflict, match="без решения"):
+        report_repo.finalize_report(db, report_id=report.id, physician="dr")
+    corrections.confirm_finding(db, finding_id=first, physician="dr")
+    corrections.reject_finding(db, finding_id=second, physician="dr")
+    with pytest.raises(ReportConflict, match="соберите"):
+        report_repo.finalize_report(db, report_id=report.id, physician="dr")   # черновик устарел
+    report = report_repo.generate_report_draft(db, study_id=series.study_id)
+    report_repo.finalize_report(db, report_id=report.id, physician="dr")
+    with pytest.raises(ReportConflict):
+        report_repo.generate_report_draft(db, study_id=series.study_id)       # подписанное не меняется
