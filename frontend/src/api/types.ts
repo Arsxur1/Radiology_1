@@ -54,6 +54,7 @@ export interface ReportOut {
   draft_text: string | null;
   sentence_map: Record<string, string>;
   finalized_by: string | null;
+  terminology_note: string | null;
 }
 
 export type ModelStatus = "shadow" | "active" | "retired";

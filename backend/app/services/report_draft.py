@@ -57,31 +57,34 @@ class ReportDraft:
 
 # Единицы измерения и подписи метрик по языкам.
 _METRIC_LABELS = {
-    "ru": {"volume_ml": "объём", "unit_volume": "мл"},
-    "uz": {"volume_ml": "hajm", "unit_volume": "ml"},
-    "en": {"volume_ml": "volume", "unit_volume": "ml"},
+    "ru": {"volume_ml": "объём", "unit_volume": "мл", "size": "размеры", "mm": "мм",
+           "none": "измерения отсутствуют", "structure": "структура"},
+    "uz": {"volume_ml": "hajm", "unit_volume": "ml", "size": "o‘lchamlari", "mm": "mm",
+           "none": "o‘lchovlar yo‘q", "structure": "tuzilma"},
+    "en": {"volume_ml": "volume", "unit_volume": "ml", "size": "size", "mm": "mm",
+           "none": "no measurements", "structure": "structure"},
 }
 
 
 def _render_sentence(f: FindingInput, language: str) -> str:
     """Детерминированный шаблон: структура + числа. Никаких добавленных смыслов."""
     labels = _METRIC_LABELS.get(language, _METRIC_LABELS["ru"])
-    name = f.label or f.code or "структура"
+    name = f.label or f.code or labels["structure"]
     parts: list[str] = []
     vol = f.measurements.get("volume_ml")
     if isinstance(vol, (int, float)):
         parts.append(f"{labels['volume_ml']} {vol} {labels['unit_volume']}")
     linear = f.measurements.get("linear_size_mm")
     if isinstance(linear, dict):
-        dims = ", ".join(f"{k}: {v} мм" for k, v in linear.items())
-        parts.append(f"размеры ({dims})")
+        dims = ", ".join(f"{k}: {v} {labels['mm']}" for k, v in linear.items())
+        parts.append(f"{labels['size']} ({dims})")
     code_ref = f" [{f.coding_system}:{f.code}]" if f.code else ""
     if parts:
         return f"{name}{code_ref} — {'; '.join(parts)}."
     if (f.code or "").startswith("CXR-"):
         # Качественная находка словаря ОГК: измерений не предполагает.
         return f"{name}{code_ref}."
-    return f"{name}{code_ref} — измерения отсутствуют."
+    return f"{name}{code_ref} — {labels['none']}."
 
 
 def build_draft(findings: list[FindingInput], *, language: str = "ru") -> ReportDraft:

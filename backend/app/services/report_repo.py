@@ -11,6 +11,7 @@ from app.models.audit import AuditAction
 from app.models.imaging import Series
 from app.models.ml import ConfirmationStatus, Finding, Report
 from app.services import audit
+from app.services.i18n_uz import localized_label
 from app.services.report_draft import FindingInput, build_draft
 
 
@@ -66,7 +67,7 @@ def generate_report_draft(
     inputs = [
         FindingInput(
             finding_id=str(f.id),
-            label=f.label,
+            label=localized_label(language, f.code, (f.coordinates or {}).get("structure_key"), f.label),
             code=f.code,
             coding_system=f.coding_system,
             measurements=f.measurements or {},

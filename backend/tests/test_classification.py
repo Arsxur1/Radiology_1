@@ -334,3 +334,15 @@ def test_shadow_report_by_age_group(db):
     rep = shadow_report(db, mv.id)["per_age_group"]
     assert list(rep) == ["0–1 год", "1–5 лет", "взрослые"]
     assert rep["взрослые"]["disagreement_rate"] == 0.0 and rep["1–5 лет"]["disagreement_rate"] == 1.0
+
+
+def test_report_in_uzbek_uses_glossary(db):
+    from app.services import report_repo
+
+    series, mv = _series(db), _model(db)
+    out = classification.classify_series(db, series=series, model_version=mv, model=FixedModel(PROBS))
+    corrections.confirm_finding(db, finding_id=out.finding_ids[0], physician="dr")      # CXR-200
+    uz = report_repo.generate_report_draft(db, study_id=series.study_id, language="uz")
+    assert uz.draft_text == "Plevral bo‘shliqda suyuqlik [MEDVIZ-CXR:CXR-200]."
+    ru = report_repo.generate_report_draft(db, study_id=series.study_id, language="ru")
+    assert ru.draft_text.startswith("Плевральный выпот")

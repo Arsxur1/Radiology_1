@@ -33,13 +33,21 @@ class ReportOut(BaseModel):
     draft_text: str | None
     sentence_map: dict
     finalized_by: str | None
+    # Предупреждение о непроверенной терминологии перевода (показывается врачу).
+    terminology_note: str | None = None
 
 
 def _out(r: Report) -> ReportOut:
+    from app.services.i18n_uz import UZ_GLOSSARY_APPROVED
+
+    note = None
+    if r.language == "uz" and not UZ_GLOSSARY_APPROVED:
+        note = ("Узбекская терминология — черновой перевод, не проверена врачом-носителем "
+                "(docs/GLOSSARY-UZ.md). Сверьте названия перед подписью.")
     return ReportOut(
         id=r.id, study_id=r.study_id, language=r.language,
         draft_text=r.draft_text, sentence_map=r.sentence_map or {},
-        finalized_by=r.finalized_by,
+        finalized_by=r.finalized_by, terminology_note=note,
     )
 
 

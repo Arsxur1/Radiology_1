@@ -18,6 +18,7 @@ export function StudyReview() {
   const [report, setReport] = useState<ReportOut | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [language, setLanguage] = useState<"ru" | "uz">("ru");
 
   const loadFindings = useCallback(async (seriesId: string) => {
     const list = await api.listSeriesFindings(seriesId);
@@ -46,7 +47,7 @@ export function StudyReview() {
     if (!studyId) return;
     setReportError(null);
     try {
-      setReport(await api.generateReport(studyId));
+      setReport(await api.generateReport(studyId, language));
     } catch (e) {
       setReportError(e instanceof ApiError ? e.message : String(e));
     }
@@ -119,6 +120,15 @@ export function StudyReview() {
         <div className="row spread">
           <strong>Черновик заключения</strong>
           <div className="row">
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value as "ru" | "uz")}
+              disabled={!!report?.finalized_by}
+              aria-label="Язык заключения"
+            >
+              <option value="ru">Русский</option>
+              <option value="uz">O‘zbekcha</option>
+            </select>
             <button onClick={onGenerateReport} disabled={!!report?.finalized_by}>
               Собрать из подтверждённых находок
             </button>
@@ -136,6 +146,11 @@ export function StudyReview() {
               <div className="muted">Подписано: {report.finalized_by}</div>
             )}
           </>
+        )}
+        {report?.terminology_note && (
+          <div className="badge badge-model" style={{ display: "block", whiteSpace: "normal", marginTop: 8 }}>
+            {report.terminology_note}
+          </div>
         )}
         {reportError && <div className="error" style={{ marginTop: 8 }}>{reportError}</div>}
         <div className="muted" style={{ marginTop: 8 }}>

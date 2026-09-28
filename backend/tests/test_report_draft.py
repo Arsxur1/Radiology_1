@@ -53,3 +53,12 @@ def test_no_measurements_sentence():
     f = FindingInput("f1", "Структура", "RID1", "RadLex", {}, confirmed=True)
     draft = build_draft([f])
     assert "измерения отсутствуют" in draft.text
+
+
+def test_uzbek_template_words():
+    from app.services.report_draft import FindingInput, build_draft
+
+    d = build_draft([FindingInput("f", "Jigar", None, "RadLex", {"volume_ml": 1500.0,
+                                                               "linear_size_mm": {"x": 10}}, True)],
+                    language="uz")
+    assert d.text == "Jigar — hajm 1500.0 ml; o‘lchamlari (x: 10 mm)."
