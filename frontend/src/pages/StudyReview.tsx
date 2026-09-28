@@ -7,6 +7,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
 import type { FindingOut, ReportOut, StudyOut } from "../api/types";
+import { hasRole } from "../auth";
+import { AddFindingForm } from "../components/AddFindingForm";
 import { FindingCard } from "../components/FindingCard";
 
 export function StudyReview() {
@@ -88,6 +90,16 @@ export function StudyReview() {
             (findings[se.id] ?? []).map((f) => (
               <FindingCard key={f.id} finding={f} onChange={(u) => onFindingChange(se.id, u)} />
             ))
+          )}
+          {hasRole("radiologist") && (
+            <AddFindingForm
+              seriesId={se.id}
+              modality={se.modality}
+              existingCodes={(findings[se.id] ?? [])
+                .filter((f) => f.confirmation_status === "confirmed" && f.code)
+                .map((f) => f.code as string)}
+              onAdded={(f) => setFindings((prev) => ({ ...prev, [se.id]: [...(prev[se.id] ?? []), f] }))}
+            />
           )}
         </section>
       ))}

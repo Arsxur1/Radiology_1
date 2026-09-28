@@ -57,7 +57,7 @@ class RejectIn(BaseModel):
 
 class CreateFindingIn(BaseModel):
     series_id: uuid.UUID
-    measurements: dict
+    measurements: dict = {}
     code: str | None = None
     label: str | None = None
     coordinates: dict | None = None
@@ -193,11 +193,16 @@ def create(
     user: CurrentUser = Depends(require_roles(Role.RADIOLOGIST)),
 ) -> FindingOut:
     """Врач добавляет находку, пропущенную моделью (обучающий сигнал)."""
-    finding = corrections.create_physician_finding(
-        db, series_id=payload.series_id, physician=user.subject,
-        measurements=payload.measurements, code=payload.code, label=payload.label,
-        coordinates=payload.coordinates, coding_system=payload.coding_system,
-        time_spent_seconds=payload.time_spent_seconds,
-    )
+    if db.get(Series, payload.series_id) is None:
+        raise HTTPException(status_code=404, detail="Серия не найдена")
+    try:
+        finding = corrections.create_physician_finding(
+            db, series_id=payload.series_id, physician=user.subject,
+            measurements=payload.measurements, code=payload.code, label=payload.label,
+            coordinates=payload.coordinates, coding_system=payload.coding_system,
+            time_spent_seconds=payload.time_spent_seconds,
+        )
+    except CorrectionError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
     db.commit()
     return _out(finding)

@@ -199,3 +199,12 @@ export interface PilotDashboard {
     miss_rate: number | null;
   }[];
 }
+
+export interface VocabularyConcept {
+  code: string;
+  label_ru: string;
+  group: string;
+  modalities: string[];
+  radlex: string | null;
+  note: string | null;
+}

@@ -271,3 +271,13 @@ def test_code_change_is_negative_for_original_code(db):
     assert f.label and f.label != "Плевральный выпот"          # подпись из словаря
     truth = series_truth(db, series)
     assert truth.positives == {"CXR-201"} and truth.negatives == {"CXR-200"}
+
+
+def test_physician_adds_vocabulary_finding(db):
+    series = _series(db)
+    f = corrections.create_physician_finding(db, series_id=series.id, physician="dr", measurements={}, code="CXR-200")
+    assert f.coding_system == "MEDVIZ-CXR" and f.label
+    with pytest.raises(CorrectionError):
+        corrections.create_physician_finding(db, series_id=series.id, physician="dr", measurements={}, code="CXR-200")
+    with pytest.raises(CorrectionError):
+        corrections.create_physician_finding(db, series_id=series.id, physician="dr", measurements={}, code="CXR-XXX")

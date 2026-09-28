@@ -185,7 +185,27 @@ def create_physician_finding(
 
     Источник — physician, статус сразу CONFIRMED. Порождает correction типа
     MODIFIED (было пусто → стало находкой): обучающий сигнал «модель пропустила».
+    Коды словаря ОГК (CXR-…) проверяются; подпись и кодовая система — из словаря.
     """
+    if code and code.startswith("CXR-"):
+        from sqlalchemy import select
+
+        from app.services.finding_vocabulary import CODING_SYSTEM, by_code
+
+        concept = by_code(code)
+        if concept is None:
+            raise CorrectionError(f"Код {code} отсутствует в словаре находок")
+        label = label or concept.label_ru
+        coding_system = CODING_SYSTEM
+        existing = db.execute(
+            select(Finding).where(
+                Finding.series_id == series_id,
+                Finding.code == code,
+                Finding.confirmation_status == ConfirmationStatus.CONFIRMED,
+            )
+        ).scalars().first()
+        if existing is not None:
+            raise CorrectionError(f"Находка {code} уже отмечена в этой серии")
     finding = Finding(
         series_id=series_id,
         inference_result_id=None,
