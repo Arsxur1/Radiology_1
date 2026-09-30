@@ -97,6 +97,10 @@ services:
     environment:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Внешний адрес (для браузеров врачей) — он же издатель токенов; backend ходит за
+      # ключами по внутреннему адресу (backchannel).
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     volumes:
       - ./infra/keycloak/realm-medviz.json:/opt/keycloak/data/import/realm-medviz.json:ro
     ports:

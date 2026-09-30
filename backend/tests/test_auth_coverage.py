@@ -14,7 +14,7 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.main import app
 
-PUBLIC = {("GET", "/"), ("GET", "/health"), ("GET", "/ready")}
+PUBLIC = {("GET", "/"), ("GET", "/health"), ("GET", "/ready"), ("GET", "/auth/config")}
 DUMMY = "00000000-0000-0000-0000-000000000000"
 
 
@@ -60,3 +60,18 @@ def test_patient_lookup_limited_to_clinical_roles(client):
 def test_reports_not_for_researcher(client):
     assert client.get(f"/reports/{DUMMY}", headers=_as("researcher")).status_code == 403
     assert client.get(f"/reports/{DUMMY}", headers=_as("clinician")).status_code == 404
+
+
+def test_auth_check_for_gateway(client):
+    assert client.get("/auth/check").status_code == 401
+    assert client.get("/auth/check", headers=_as("researcher")).status_code == 204
+
+
+def test_issuer_public_and_jwks_internal(monkeypatch):
+    from app.core.config import Settings
+
+    monkeypatch.setenv("KEYCLOAK_URL", "http://keycloak:8080")
+    monkeypatch.setenv("KEYCLOAK_PUBLIC_URL", "http://10.0.0.50:8080")
+    s = Settings(_env_file=None)
+    assert s.oidc_issuer == "http://10.0.0.50:8080/realms/medviz"
+    assert s.oidc_jwks_url == "http://keycloak:8080/realms/medviz/protocol/openid-connect/certs"

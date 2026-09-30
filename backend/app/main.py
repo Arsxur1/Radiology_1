@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     routes_audit,
+    routes_auth,
     routes_classification,
     routes_findings,
     routes_health,
@@ -54,6 +55,8 @@ app.add_middleware(
 _AUTH = [Depends(get_current_user)]
 
 app.include_router(routes_health.router)
+# /auth/config публичный, /auth/check проверяет пользователя сам.
+app.include_router(routes_auth.router)
 app.include_router(routes_studies.router, dependencies=_AUTH)
 app.include_router(routes_modes.router, dependencies=_AUTH)
 app.include_router(routes_audit.router, dependencies=_AUTH)

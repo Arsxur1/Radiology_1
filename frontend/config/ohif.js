@@ -11,6 +11,18 @@ var MEDVIZ_GATEWAY = window.location.protocol + '//' + window.location.hostname;
 
 window.config = {
   name: 'medviz',
+  // Вход через Keycloak клиники (тот же, что у рабочего места врача); токен OHIF отправляет
+  // в DICOMweb, а шлюз проверяет его на backend.
+  oidc: [
+    {
+      authority: window.location.protocol + '//' + window.location.hostname + ':8080/realms/medviz',
+      client_id: 'medviz-ohif',
+      redirect_uri: '/callback',
+      response_type: 'code',
+      scope: 'openid',
+      post_logout_redirect_uri: '/',
+    },
+  ],
   routerBasename: '/',
   // Обязательные ключи v3: пустые списки — стандартные расширения и режимы образа.
   extensions: [],

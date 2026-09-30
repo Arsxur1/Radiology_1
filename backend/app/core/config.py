@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     keycloak_url: str = Field("http://keycloak:8080", alias="KEYCLOAK_URL")
     keycloak_realm: str = Field("medviz", alias="KEYCLOAK_REALM")
     keycloak_client_id: str = Field("medviz-backend", alias="KEYCLOAK_CLIENT_ID")
+    # Внешний адрес Keycloak, по которому ходят браузеры (напр. http://10.0.0.50:8080).
+    # Он же — издатель (iss) в токенах; ключи JWKS backend берёт по внутреннему KEYCLOAK_URL.
+    keycloak_public_url: str | None = Field(None, alias="KEYCLOAK_PUBLIC_URL")
+    web_client_id: str = Field("medviz-web", alias="KEYCLOAK_WEB_CLIENT_ID")
     # Разрешить dev-заголовки X-Debug-* (ТОЛЬКО на изолированных стендах).
     allow_debug_auth: bool = Field(False, alias="ALLOW_DEBUG_AUTH")
 
@@ -81,7 +85,8 @@ class Settings(BaseSettings):
     # Каталог весов моделей: файл <weights_hash>.pt, хеш сверяется при загрузке (SR-5).
     models_dir: str = Field("/data/models", alias="MEDVIZ_MODELS_DIR")
 
-    @field_validator("pacs_aet", "pacs_host", "pacs_port", "pacs_dicomweb_url", mode="before")
+    @field_validator("pacs_aet", "pacs_host", "pacs_port", "pacs_dicomweb_url", "keycloak_public_url",
+                     mode="before")
     @classmethod
     def _empty_is_none(cls, v):
         # В .env незаполненный параметр — пустая строка («PACS_PORT=»): это «не задано».
@@ -93,11 +98,12 @@ class Settings(BaseSettings):
 
     @property
     def oidc_issuer(self) -> str:
-        return f"{self.keycloak_url}/realms/{self.keycloak_realm}"
+        base = (self.keycloak_public_url or self.keycloak_url).rstrip("/")
+        return f"{base}/realms/{self.keycloak_realm}"
 
     @property
     def oidc_jwks_url(self) -> str:
-        return f"{self.oidc_issuer}/protocol/openid-connect/certs"
+        return f"{self.keycloak_url.rstrip('/')}/realms/{self.keycloak_realm}/protocol/openid-connect/certs"
 
     @property
     def database_url(self) -> str:

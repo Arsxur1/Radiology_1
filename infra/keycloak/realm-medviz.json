@@ -6,11 +6,26 @@
   "registrationAllowed": false,
   "roles": {
     "realm": [
-      { "name": "admin", "description": "Администратор: настройки, смена режимов работы" },
-      { "name": "radiologist", "description": "Врач-рентгенолог: подтверждение находок и правки" },
-      { "name": "clinician", "description": "Клиницист: просмотр и подтверждённые заключения" },
-      { "name": "researcher", "description": "Инженер-исследователь: только обезличенные данные" },
-      { "name": "auditor", "description": "Аудитор: только чтение журналов" }
+      {
+        "name": "admin",
+        "description": "Администратор: настройки, смена режимов работы"
+      },
+      {
+        "name": "radiologist",
+        "description": "Врач-рентгенолог: подтверждение находок и правки"
+      },
+      {
+        "name": "clinician",
+        "description": "Клиницист: просмотр и подтверждённые заключения"
+      },
+      {
+        "name": "researcher",
+        "description": "Инженер-исследователь: только обезличенные данные"
+      },
+      {
+        "name": "auditor",
+        "description": "Аудитор: только чтение журналов"
+      }
     ]
   },
   "clients": [
@@ -22,8 +37,85 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "secret": "change_me_keycloak",
-      "redirectUris": ["http://localhost:8000/*", "http://localhost:3000/*"],
-      "webOrigins": ["http://localhost:3000", "http://localhost:8000"]
+      "redirectUris": [
+        "http://localhost:8000/*",
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:8000"
+      ]
+    },
+    {
+      "clientId": "medviz-web",
+      "name": "Рабочее место врача",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "redirectUris": [
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "protocolMappers": [
+        {
+          "name": "audience-medviz-backend",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "medviz-backend",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "medviz-ohif",
+      "name": "Просмотрщик OHIF",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "protocolMappers": [
+        {
+          "name": "audience-medviz-backend",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "medviz-backend",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
     }
-  ]
+  ],
+  "accessTokenLifespan": 600,
+  "ssoSessionIdleTimeout": 1800
 }

@@ -15,6 +15,11 @@
       не скачивается (MinIO ограничивает публикацию бесплатных образов), указать в `.env`
       `MINIO_IMAGE` — зеркало или другое S3-совместимое хранилище.
 - [ ] **ИТ** `make up && make migrate && make seed`.
+- [ ] **ИТ** Вход врачей (Keycloak): в `.env` — `KEYCLOAK_PUBLIC_URL=http://<IP сервера>:8080`,
+      `ALLOW_DEBUG_AUTH=false`; `make up`, затем `make keycloak-configure`.
+- [ ] **ИТ** Учётные записи: `http://<IP сервера>:8080/admin` → realm `medviz` → Users →
+      создать сотрудника → Role mapping: `radiologist` / `clinician` / `admin` / `researcher` /
+      `auditor`. Пароли — только лично сотруднику, не в чатах и не в документах.
 - [ ] **ИТ** Рабочие места врачей открывают `http://<IP сервера>/` (шлюз: интерфейс, API,
       DICOMweb). Просмотрщик OHIF — `http://<IP сервера>:3000/`, кнопка «Открыть в
       просмотрщике» в разборе исследования. Порты 80 и 3000 — только для сети клиники.

@@ -4,12 +4,15 @@
 // токен, либо dev-идентификация через заголовки X-Debug-* (работает ТОЛЬКО когда
 // backend запущен с ALLOW_DEBUG_AUTH=true — изолированные стенды).
 
+import { clearOidc, oidcAccessToken } from "./oidc";
+
 const TOKEN_KEY = "medviz.token";
 const DEBUG_SUBJECT_KEY = "medviz.debug.subject";
 const DEBUG_ROLES_KEY = "medviz.debug.roles";
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
+  // Приоритет — сеанс входа через Keycloak; вставленный вручную токен — запасной путь.
+  return oidcAccessToken() ?? localStorage.getItem(TOKEN_KEY);
 }
 
 export function setToken(token: string): void {
@@ -29,6 +32,7 @@ export function setDebugIdentity(subject: string, roles: string): void {
 }
 
 export function clearAuth(): void {
+  clearOidc();
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(DEBUG_SUBJECT_KEY);
   localStorage.removeItem(DEBUG_ROLES_KEY);

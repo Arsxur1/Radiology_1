@@ -1,4 +1,4 @@
-.PHONY: help up down logs build migrate revision test lint fmt seed backup check-pacs xrv-candidate totalseg-candidate restore
+.PHONY: help up down logs build migrate revision test lint fmt seed backup check-pacs xrv-candidate totalseg-candidate restore keycloak-configure
 
 help:
 	@echo "up         — поднять весь стек (docker compose up -d --build)"
@@ -10,6 +10,7 @@ help:
 	@echo "lint       — ruff check"
 	@echo "fmt        — ruff format"
 	@echo "backup     — бэкап PostgreSQL (оба контура) + S3 + веса моделей"
+	@echo "keycloak-configure — адрес сервера в клиенты входа Keycloak (после установки/смены IP)"
 	@echo "restore    — восстановление: make restore BACKUP=backups/<дата-время>"
 	@echo "check-pacs — проверить связь с настроенным PACS (.env)"
 	@echo "totalseg-candidate — кандидат сегментации КТ на TotalSegmentator (без GPU, быстрый режим)"
@@ -68,3 +69,7 @@ xrv-candidate:
 totalseg-candidate:
 	docker compose run --rm -v $(PWD)/models:/data/models-rw -v totalseg_weights:/root/.totalsegmentator \
 		-e PYTHONPATH=/app worker python scripts/totalseg_candidate.py --out /data/models-rw
+
+# Прописать адрес сервера (KEYCLOAK_PUBLIC_URL из .env) в клиенты входа Keycloak.
+keycloak-configure:
+	docker compose run --rm -e PYTHONPATH=/app backend python scripts/keycloak_configure.py

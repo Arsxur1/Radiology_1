@@ -1,6 +1,7 @@
 // HTTP-клиент backend. Единая точка добавления заголовков аутентификации.
 
 import { authHeaders } from "../auth";
+import { ensureFresh, hasOidcSession, login } from "../oidc";
 import type {
   CalibrationProposal,
   DriftSlice,
@@ -24,15 +25,28 @@ import type {
 
 const BASE = "/api";
 
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  await ensureFresh();
+  const doFetch = () =>
+    fetch(BASE + path, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+        ...(init?.headers ?? {}),
+      },
+    });
+  let resp = await doFetch();
+  if (resp.status === 401 && hasOidcSession()) {
+    // Токен отозван/истёк раньше срока — одна попытка обновить, иначе повторный вход.
+    if (await ensureFresh(true)) resp = await doFetch();
+    if (resp.status === 401) await login(window.location.pathname);
+  }
+  return resp;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const resp = await fetch(BASE + path, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders(),
-      ...(init?.headers ?? {}),
-    },
-  });
+  const resp = await send(path, init);
   if (!resp.ok) {
     let detail: unknown;
     try {
@@ -48,7 +62,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** Бинарный ответ (PNG) с заголовками аутентификации → object URL для <img>. */
 async function requestBlobUrl(path: string): Promise<string> {
-  const resp = await fetch(BASE + path, { headers: { ...authHeaders() } });
+  const resp = await send(path, { headers: { "Content-Type": "" } });
   if (!resp.ok) throw new ApiError(resp.status, resp.statusText);
   return URL.createObjectURL(await resp.blob());
 }

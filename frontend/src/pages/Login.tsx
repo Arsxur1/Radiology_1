@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { setDebugIdentity, setToken } from "../auth";
+import { login } from "../oidc";
 
 export function Login() {
   const nav = useNavigate();
@@ -16,7 +17,15 @@ export function Login() {
       <h2>Вход</h2>
 
       <div className="card">
-        <h3>OIDC-токен (продакшн)</h3>
+        <h3>Вход сотрудника</h3>
+        <p className="muted">Учётная запись клиники (Keycloak). Роли назначает администратор.</p>
+        <button className="primary" onClick={() => login("/")}>
+          Войти
+        </button>
+      </div>
+
+      <details className="card">
+        <summary className="muted">Вход по токену (для администратора)</summary>
         <p className="muted">Bearer-токен, выданный Keycloak.</p>
         <input
           style={{ width: "100%" }}
@@ -36,7 +45,7 @@ export function Login() {
             Войти по токену
           </button>
         </div>
-      </div>
+      </details>
 
       <div className="card">
         <h3>Отладочный вход (только стенд)</h3>

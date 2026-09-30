@@ -3,9 +3,11 @@ import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { api } from "./api/client";
 import type { OperatingMode } from "./api/types";
 import { authHeaders, clearAuth, hasRole } from "./auth";
+import { hasOidcSession, logout } from "./oidc";
 import { ModeBanner } from "./components/ModeBanner";
 import { Admin } from "./pages/Admin";
 import { DriftPanel } from "./pages/DriftPanel";
+import { AuthCallback } from "./pages/AuthCallback";
 import { Login } from "./pages/Login";
 import { ModalityRegistration } from "./pages/ModalityRegistration";
 import { PatientDynamics } from "./pages/PatientDynamics";
@@ -47,8 +49,12 @@ function Shell({ children }: { children: React.ReactNode }) {
           {hasRole("admin", "auditor") && <Link to="/drift">Дрейф</Link>}
           <button
             onClick={() => {
-              clearAuth();
-              nav("/login");
+              // Сеанс Keycloak завершается на сервере входа; иначе — локальный выход.
+              if (hasOidcSession()) void logout();
+              else {
+                clearAuth();
+                nav("/login");
+              }
             }}
           >
             Выйти
@@ -69,6 +75,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/auth/callback" element={<AuthCallback />} />
       <Route
         path="/"
         element={
