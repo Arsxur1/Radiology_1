@@ -210,3 +210,33 @@ def test_build_and_store_end_to_end(db):
     assert abs(state["volume_ml"] - mask.sum() * 2.0 / 1000) < 0.5
     assert {c for _, c in stored.values()} == {"model/stl", "model/gltf-binary"}
     assert f.coordinates["mesh"]["status"] == "ready" and f.coordinates["structure_key"] == "liver"
+
+
+def test_worker_marks_failed_on_storage_error(db, monkeypatch):
+    """Сбой хранилища не оставляет статус «queued» навсегда: failed с понятной причиной."""
+    np = pytest.importorskip("numpy")
+    nib = pytest.importorskip("nibabel")
+    pytest.importorskip("skimage")
+    from contextlib import contextmanager
+
+    from app.services import storage
+    from app.workers import mesh_tasks
+
+    _, mask, affine = _ellipsoid()
+    blob = gzip.compress(nib.Nifti1Image(np.where(mask, 5, 0).astype(np.uint8), affine).to_bytes())
+    f = _finding(db)
+
+    @contextmanager
+    def session():
+        yield db
+
+    def broken_put(*a, **k):
+        raise ConnectionError("S3 недоступно")
+
+    monkeypatch.setattr(mesh_tasks, "SessionLocal", session)
+    monkeypatch.setattr(storage, "get_object_ref", lambda ref: blob)
+    monkeypatch.setattr(storage, "put_object", broken_put)
+    state = mesh_tasks.build_mesh(str(f.id))
+    assert state["status"] == "failed" and "Технический сбой (ConnectionError)" in state["reason"]
+    db.refresh(f)
+    assert f.coordinates["mesh"]["status"] == "failed"
