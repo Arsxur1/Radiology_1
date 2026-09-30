@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, get_current_user, require_roles
 from app.core.roles import Role
-from app.db.session import get_db
+from app.db.session import get_db, get_idmap_db
 from app.models.audit import AuditAction
 from app.models.imaging import Series, Study
 from app.services import audit
@@ -166,3 +166,56 @@ def series_preview(
     if png is None:
         raise HTTPException(status_code=404, detail="Снимок серии не найден в хранилище")
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
+
+
+# Допустимые цели раскрытия личности (purpose of use) — фиксируются в журнале аудита.
+IDENTITY_PURPOSES = {
+    "report": "подписание / передача заключения",
+    "clinical": "клиническое решение по пациенту",
+    "comparison": "сопоставление с предыдущими исследованиями в PACS",
+}
+
+
+class IdentityOut(BaseModel):
+    patient_name: str | None
+    patient_mrn: str | None
+    original_study_instance_uid: str | None
+    purpose: str
+
+
+@router.get("/{study_id}/identity", response_model=IdentityOut)
+def reveal_identity(
+    study_id: uuid.UUID,
+    purpose: str,
+    response: Response,
+    db: Session = Depends(get_db),
+    idmap: Session = Depends(get_idmap_db),
+    user: CurrentUser = Depends(require_roles(Role.RADIOLOGIST, Role.CLINICIAN)),
+) -> IdentityOut:
+    """Раскрыть реальные данные пациента для лечащего/описывающего врача (SR-9).
+
+    Данные берутся из идентифицирующего контура и не сохраняются в доверенном.
+    Каждое раскрытие — с целью — пишется в журнал аудита ДО выдачи данных.
+    """
+    from app.models.idmap import PatientPseudonymMap
+
+    if purpose not in IDENTITY_PURPOSES:
+        raise HTTPException(status_code=422, detail={"allowed_purposes": IDENTITY_PURPOSES})
+    study = db.get(Study, study_id)
+    if study is None:
+        raise HTTPException(status_code=404, detail="Исследование не найдено")
+    row = idmap.execute(
+        select(PatientPseudonymMap)
+        .where(PatientPseudonymMap.pseudonym_study_instance_uid == study.study_instance_uid)
+        .order_by(PatientPseudonymMap.created_at.desc())
+    ).scalars().first()
+    audit.record_access(db, user, AuditAction.PATIENT_ACCESS, entity_type="identity", entity_id=study.id,
+                        details={"what": "раскрытие личности пациента", "purpose": purpose,
+                                 "patient_id": str(study.patient_id), "found": row is not None})
+    if row is None:
+        raise HTTPException(status_code=404, detail="Нет данных о пациенте в идентифицирующем контуре")
+    response.headers["Cache-Control"] = "no-store"
+    name = (row.real_name or "").replace("^", " ").strip() or None
+    return IdentityOut(patient_name=name, patient_mrn=row.real_mrn,
+                       original_study_instance_uid=row.real_study_instance_uid,
+                       purpose=IDENTITY_PURPOSES[purpose])

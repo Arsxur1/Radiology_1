@@ -260,3 +260,10 @@ export interface AuditEntry {
   entity_id: string | null;
   details: Record<string, unknown>;
 }
+
+export interface IdentityOut {
+  patient_name: string | null;
+  patient_mrn: string | null;
+  original_study_instance_uid: string | null;
+  purpose: string;
+}

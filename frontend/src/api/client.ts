@@ -7,6 +7,7 @@ import type {
   CalibrationProposal,
   DriftSlice,
   FindingOut,
+  IdentityOut,
   ModeOut,
   ModelOut,
   OperatingMode,
@@ -78,6 +79,9 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  revealIdentity: (studyId: string, purpose: string) =>
+    request<IdentityOut>(`/studies/${studyId}/identity?purpose=${encodeURIComponent(purpose)}`),
+
   auditList: (params: URLSearchParams) => request<AuditEntry[]>(`/audit?${params}`),
   auditVerify: () => request<{ intact: boolean }>("/audit/verify"),
   auditCsvUrl: (params: URLSearchParams) => requestBlobUrl(`/audit/export.csv?${params}`),

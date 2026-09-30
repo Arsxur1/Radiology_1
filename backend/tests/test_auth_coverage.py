@@ -134,3 +134,42 @@ def test_audit_api_filters_paging_export(client, db):
     assert csv_resp.status_code == 200 and csv_resp.text.count("\n") == 6       # заголовок + 5
     last = client.get("/audit?limit=1", headers=h).json()[0]
     assert last["action"] == "export" and last["entity_type"] == "audit_log"     # выгрузка журналирована
+
+
+def test_identity_reveal_is_role_limited_and_audited(client, db):
+    from datetime import datetime
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from sqlalchemy.pool import StaticPool
+
+    from app.db.session import get_idmap_db
+    from app.models.audit import AuditLog
+    from app.models.idmap import IdMapBase, PatientPseudonymMap
+    from app.models.imaging import Study
+    from app.models.patient import Patient
+
+    eng = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    IdMapBase.metadata.create_all(eng)
+    idmap = sessionmaker(bind=eng)()
+    app.dependency_overrides[get_idmap_db] = lambda: idmap
+    p = Patient()
+    db.add(p)
+    db.flush()
+    st = Study(patient_id=p.id, study_instance_uid="2.25.1", modality="DX", study_date=datetime(2026, 9, 1))
+    db.add(st)
+    db.commit()
+    idmap.add(PatientPseudonymMap(pseudonym_patient_id=p.id, real_mrn="NCMC-777", real_name="Karimov^Aziz",
+                                  real_study_instance_uid="1.2.840.99", pseudonym_study_instance_uid="2.25.1"))
+    idmap.commit()
+
+    url = f"/studies/{st.id}/identity"
+    assert client.get(f"{url}?purpose=report", headers=_as("researcher")).status_code == 403
+    assert client.get(f"{url}?purpose=report", headers=_as("auditor")).status_code == 403
+    assert client.get(f"{url}?purpose=curiosity", headers=_as("radiologist")).status_code == 422
+    r = client.get(f"{url}?purpose=report", headers=_as("radiologist"))
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
+    assert r.json()["patient_name"] == "Karimov Aziz" and r.json()["patient_mrn"] == "NCMC-777"
+    log = db.query(AuditLog).filter(AuditLog.entity_type == "identity").all()
+    assert len(log) == 1 and log[0].details["purpose"] == "report"
+    assert "Karimov" not in str(log[0].details)            # в журнале — факт и цель, не сами PHI
