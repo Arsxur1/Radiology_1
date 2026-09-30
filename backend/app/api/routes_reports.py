@@ -20,6 +20,9 @@ from app.services.report_export import ReportExportInput
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
+# Кто читает заключения: врачи и клиницисты; админ; не исследователь (только обезличенные данные).
+REPORT_READERS = (Role.RADIOLOGIST, Role.CLINICIAN, Role.ADMIN, Role.AUDITOR)
+
 
 class GenerateIn(BaseModel):
     study_id: uuid.UUID
@@ -69,7 +72,11 @@ def generate(
 
 
 @router.get("/{report_id}", response_model=ReportOut)
-def get_report(report_id: uuid.UUID, db: Session = Depends(get_db)) -> ReportOut:
+def get_report(
+    report_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(*REPORT_READERS)),
+) -> ReportOut:
     report = db.get(Report, report_id)
     if report is None:
         raise HTTPException(status_code=404, detail="Черновик не найден")
@@ -94,7 +101,11 @@ def finalize(
 
 
 @router.get("/{report_id}/export.html", response_class=HTMLResponse)
-def export_html(report_id: uuid.UUID, db: Session = Depends(get_db)) -> HTMLResponse:
+def export_html(
+    report_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(*REPORT_READERS)),
+) -> HTMLResponse:
     """Выгрузка заключения в HTML для печати в PDF (FR-8). Только финализированное."""
     report = db.get(Report, report_id)
     if report is None:
@@ -116,7 +127,11 @@ def export_html(report_id: uuid.UUID, db: Session = Depends(get_db)) -> HTMLResp
 
 
 @router.get("/{report_id}/sr-content")
-def sr_content(report_id: uuid.UUID, db: Session = Depends(get_db)) -> dict:
+def sr_content(
+    report_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(*REPORT_READERS)),
+) -> dict:
     """Структура содержания DICOM SR с трассировкой пункт → находка (FR-8).
 
     Сам бинарный SR (Basic Text SR) собирается через pydicom на стенде; здесь —

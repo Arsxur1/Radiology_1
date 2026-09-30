@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
@@ -25,6 +25,7 @@ from app.api import (
     routes_temporal,
     routes_vocabulary,
 )
+from app.api.deps import get_current_user
 from app.core.config import get_settings
 
 settings = get_settings()
@@ -48,22 +49,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Без аутентификации — только проверки живости для мониторинга (/health, /ready).
+# Всё остальное требует пользователя (FR-12); роли уточняются на уровне маршрутов.
+_AUTH = [Depends(get_current_user)]
+
 app.include_router(routes_health.router)
-app.include_router(routes_studies.router)
-app.include_router(routes_modes.router)
-app.include_router(routes_audit.router)
-app.include_router(routes_findings.router)
-app.include_router(routes_models.router)
-app.include_router(routes_learning.router)
-app.include_router(routes_segmentation.router)
-app.include_router(routes_classification.router)
-app.include_router(routes_temporal.router)
-app.include_router(routes_reports.router)
-app.include_router(routes_pacs.router)
-app.include_router(routes_patients.router)
-app.include_router(routes_registration.router)
-app.include_router(routes_vocabulary.router)
-app.include_router(routes_pilot.router)
+app.include_router(routes_studies.router, dependencies=_AUTH)
+app.include_router(routes_modes.router, dependencies=_AUTH)
+app.include_router(routes_audit.router, dependencies=_AUTH)
+app.include_router(routes_findings.router, dependencies=_AUTH)
+app.include_router(routes_models.router, dependencies=_AUTH)
+app.include_router(routes_learning.router, dependencies=_AUTH)
+app.include_router(routes_segmentation.router, dependencies=_AUTH)
+app.include_router(routes_classification.router, dependencies=_AUTH)
+app.include_router(routes_temporal.router, dependencies=_AUTH)
+app.include_router(routes_reports.router, dependencies=_AUTH)
+app.include_router(routes_pacs.router, dependencies=_AUTH)
+app.include_router(routes_patients.router, dependencies=_AUTH)
+app.include_router(routes_registration.router, dependencies=_AUTH)
+app.include_router(routes_vocabulary.router, dependencies=_AUTH)
+app.include_router(routes_pilot.router, dependencies=_AUTH)
 
 
 @app.get("/")

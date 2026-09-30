@@ -66,7 +66,11 @@ def _out(db: Session, p: Patient) -> PatientOut:
 
 
 @router.get("/{patient_id}", response_model=PatientOut)
-def get_patient(patient_id: uuid.UUID, db: Session = Depends(get_db)) -> PatientOut:
+def get_patient(
+    patient_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.ADMIN, Role.RADIOLOGIST)),
+) -> PatientOut:
     p = db.get(Patient, patient_id)
     if p is None:
         raise HTTPException(status_code=404, detail="Пациент не найден")
@@ -77,6 +81,7 @@ def get_patient(patient_id: uuid.UUID, db: Session = Depends(get_db)) -> Patient
 def search_by_identifier(
     value: str,
     db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.ADMIN, Role.RADIOLOGIST)),
 ) -> list[PatientOut]:
     """Поиск по нормализованному идентификатору (транслитерация уже применена клиентом
     ingest). Возвращает кандидатов для ручного объединения при неоднозначности."""
