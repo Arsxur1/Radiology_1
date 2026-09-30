@@ -16,7 +16,11 @@
       `MINIO_IMAGE` — зеркало или другое S3-совместимое хранилище.
 - [ ] **ИТ** `make up && make migrate && make seed`.
 - [ ] **ИТ** Вход врачей (Keycloak): в `.env` — `KEYCLOAK_PUBLIC_URL=http://<IP сервера>:8080`,
-      `ALLOW_DEBUG_AUTH=false`; `make up`, затем `make keycloak-configure`.
+      `ALLOW_DEBUG_AUTH=false`; `make up`, затем `make keycloak-configure` — он же включает
+      защиту входа: после 5 неверных паролей учётная запись блокируется (пауза до 15 мин),
+      пароли от 12 символов с заглавной, строчной буквой и цифрой, без имени пользователя
+      (Keycloak сравнивает с учётом регистра), не повторяют 3 последних; сессия — 30 мин без
+      действий и не дольше 10 ч; все входы и ошибки входа — в журнале событий Keycloak (90 дней).
 - [ ] **ИТ** Учётные записи: `http://<IP сервера>:8080/admin` → realm `medviz` → Users →
       создать сотрудника → Role mapping: `radiologist` / `clinician` / `admin` / `researcher` /
       `auditor`. Пароли — только лично сотруднику, не в чатах и не в документах.
