@@ -146,6 +146,8 @@ export const api = {
 
   finalizeReport: (reportId: string) =>
     request<ReportOut>(`/reports/${reportId}/finalize`, { method: "POST" }),
+  sendReportToPacs: (reportId: string) =>
+    request<{ sent: boolean; sop_instance_uid: string }>(`/reports/${reportId}/send-to-pacs`, { method: "POST" }),
 
   // ── Режимы работы (раздел 2) ─────────────────────────────────────────────
   changeMode: (modality: string, targetMode: OperatingMode) =>

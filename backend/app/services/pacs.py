@@ -211,6 +211,32 @@ def move_study(
     return ok
 
 
+def store_datasets(node: PacsNode, datasets: list) -> list[int]:
+    """C-STORE: отправить наборы данных в PACS (например, подписанное заключение SR).
+
+    Возвращает статусы по каждому набору (0x0000 — принят). Контекст передачи — по
+    SOP-классу каждого набора, синтаксис — Explicit VR Little Endian.
+    """
+    _require_pynetdicom()
+    from pydicom.uid import ExplicitVRLittleEndian
+    from pynetdicom import AE
+
+    ae = AE(ae_title=node.local_aet)
+    for sop_class in {str(ds.SOPClassUID) for ds in datasets}:
+        ae.add_requested_context(sop_class, ExplicitVRLittleEndian)
+    assoc = ae.associate(node.host, node.port, ae_title=node.aet)
+    if not assoc.is_established:
+        raise PacsUnavailable(f"Нет ассоциации с {node.aet}@{node.host}:{node.port}")
+    statuses = []
+    try:
+        for ds in datasets:
+            status = assoc.send_c_store(ds)
+            statuses.append(int(status.Status) if status else -1)
+    finally:
+        assoc.release()
+    return statuses
+
+
 def _safe_int(value) -> int | None:
     try:
         return int(value)

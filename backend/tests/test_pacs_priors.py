@@ -27,7 +27,7 @@ H = {"X-Debug-Subject": "dr.priors", "X-Debug-Roles": "radiologist"}
 
 @pytest.fixture
 def setup(db, monkeypatch, dicom_net):  # noqa: F811
-    node, received = dicom_net
+    node, received, _ = dicom_net
     s = get_settings()
     monkeypatch.setattr(s, "allow_debug_auth", True)
     monkeypatch.setattr(s, "pacs_aet", node.aet)

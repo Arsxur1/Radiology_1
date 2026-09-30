@@ -11,6 +11,7 @@ import { hasRole } from "../auth";
 import { AddFindingForm } from "../components/AddFindingForm";
 import { FindingCard } from "../components/FindingCard";
 import { PacsPriors } from "../components/PacsPriors";
+import { SendToPacs } from "../components/SendToPacs";
 import { PatientIdentity } from "../components/PatientIdentity";
 
 export function StudyReview() {
@@ -149,6 +150,7 @@ export function StudyReview() {
             {report.finalized_by && (
               <div className="muted">Подписано: {report.finalized_by}</div>
             )}
+            {report.finalized_by && hasRole("radiologist") && <SendToPacs reportId={report.id} />}
           </>
         )}
         {report?.terminology_note && (

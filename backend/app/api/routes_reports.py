@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import CurrentUser, require_roles
 from app.core.roles import Role
-from app.db.session import get_db
+from app.db.session import get_db, get_idmap_db
 from app.models.audit import AuditAction
 from app.models.imaging import Study
 from app.models.ml import Report
@@ -173,3 +173,64 @@ def sr_content(
 def _split_sentences(text: str) -> list[str]:
     parts = [p.strip() for p in text.split(". ") if p.strip()]
     return [p if p.endswith(".") else p + "." for p in parts]
+
+
+@router.post("/{report_id}/send-to-pacs")
+def send_to_pacs(
+    report_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    idmap: Session = Depends(get_idmap_db),
+    user: CurrentUser = Depends(require_roles(Role.RADIOLOGIST)),
+) -> dict:
+    """Отправить подписанное заключение в PACS клиники как DICOM SR (C-STORE).
+
+    SR кладётся к настоящему пациенту и исследованию: реальные идентификаторы берутся
+    из идентифицирующего контура только в памяти на время отправки. Повторная отправка
+    заменяет тот же документ (UID детерминированы). Факт отправки — в журнал аудита.
+    """
+    from sqlalchemy import select
+
+    from app.models.idmap import PatientPseudonymMap
+    from app.services import pacs
+    from app.services.report_export import SrIdentity, build_dicom_sr
+
+    report = db.get(Report, report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Черновик не найден")
+    if not report.finalized_by:
+        raise HTTPException(status_code=409, detail="Отправка возможна только после подписи врачом")
+    node = pacs.default_node_from_settings()
+    if node is None:
+        raise HTTPException(status_code=503, detail="Узел PACS не настроен (PACS_AET/PACS_HOST/PACS_PORT в .env)")
+    study = db.get(Study, report.study_id)
+    row = idmap.execute(
+        select(PatientPseudonymMap)
+        .where(PatientPseudonymMap.pseudonym_study_instance_uid == study.study_instance_uid)
+        .order_by(PatientPseudonymMap.created_at.desc())
+    ).scalars().first()
+    if row is None or not row.real_study_instance_uid or not row.real_mrn:
+        raise HTTPException(status_code=409, detail="Нет исходных идентификаторов исследования — "
+                            "SR не к чему привязать в PACS")
+    data = ReportExportInput(
+        study_uid=study.study_instance_uid, language=report.language, draft_text=report.draft_text or "",
+        sentence_map=report.sentence_map or {}, finalized_by=report.finalized_by,
+        sentences=_split_sentences(report.draft_text or ""),
+    )
+    ds = build_dicom_sr(
+        data, SrIdentity(patient_id=row.real_mrn, patient_name=row.real_name or "",
+                         study_instance_uid=row.real_study_instance_uid),
+        report_id=str(report.id), verified_at=report.updated_at or report.created_at,
+        study_date=study.study_date,
+    )
+    try:
+        statuses = pacs.store_datasets(node, [ds])
+    except pacs.PacsUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    ok = statuses == [0]
+    audit.record_access(db, user, AuditAction.EXPORT, entity_type="report", entity_id=report.id,
+                        details={"what": "заключение (DICOM SR) отправлено в PACS", "ok": ok,
+                                 "status": statuses[0] if statuses else None,
+                                 "sop_instance_uid": str(ds.SOPInstanceUID)})
+    if not ok:
+        raise HTTPException(status_code=502, detail=f"PACS не принял заключение (статус {statuses})")
+    return {"sent": True, "sop_instance_uid": str(ds.SOPInstanceUID)}

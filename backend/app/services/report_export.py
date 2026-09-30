@@ -3,9 +3,8 @@
 - HTML-рендер (детерминированный, офлайн) → печать в PDF без внешних сервисов.
   Тяжёлый рендер PDF (WeasyPrint/wkhtmltopdf) подключается на стенде; HTML
   самодостаточен и пригоден для печати как есть.
-- DICOM SR: структурированный документ из подтверждённых находок. Тело сборки
-  через pydicom подключается на стенде (ленивый импорт); здесь — трассируемая
-  структура контента.
+- DICOM SR: Basic Text SR из подписанного заключения (build_dicom_sr); уходит в PACS
+  клиники по C-STORE к исходному исследованию (POST /reports/{id}/send-to-pacs).
 
 Экспортируется только финализированный черновик (после активного действия врача).
 Каждый пункт трассируется до находки (sentence_map).
@@ -60,42 +59,116 @@ def render_html(data: ReportExportInput) -> str:
     )
 
 
-def build_dicom_sr(data: ReportExportInput):  # pragma: no cover
-    """Построить DICOM SR (Basic Text SR) из подтверждённых находок.
+@dataclass
+class SrIdentity:
+    """Реальные данные пациента и исследования для SR, уходящего в PACS клиники.
 
-    Дерево содержания формируется чистой функцией `report_sr.build_sr_content`
-    (тестируемо), здесь оно сериализуется в DICOM через pydicom. Каждый пункт
-    трассируется до находки. Изображения не анализируются (FR-8). pydicom
-    импортируется лениво — на стенде.
+    Берутся из идентифицирующего контура только в момент отправки и живут в памяти:
+    без них SR лёг бы в PACS отдельным «псевдопациентом», и клиницист его не нашёл бы.
     """
-    import pydicom
+
+    patient_id: str
+    patient_name: str
+    study_instance_uid: str
+
+
+def _uid(*parts: str) -> str:
+    """Детерминированный UID: повторная отправка заменяет тот же документ в PACS."""
+    from pydicom.uid import generate_uid
+
+    return generate_uid(entropy_srcs=["medviz-sr", *parts])
+
+
+def _code(value: str, scheme: str, meaning: str):
     from pydicom.dataset import Dataset
+
+    c = Dataset()
+    c.CodeValue, c.CodingSchemeDesignator, c.CodeMeaning = value, scheme, meaning
+    return c
+
+
+def build_dicom_sr(data: ReportExportInput, identity: SrIdentity, *, report_id: str, verified_at,
+                   study_date=None, organization: str = "medviz"):
+    """DICOM Basic Text SR из подписанного заключения (FR-8).
+
+    Корень — CONTAINER «Diagnostic imaging report» (LOINC 18748-4), пункты — TEXT
+    «Finding» (DCM 121071), по одному на предложение. Трассировка пункта до находки —
+    ObservationUID, выведенный из finding_id. Изображения не анализируются: SR собран
+    только из подтверждённых находок, VERIFIED — подписан врачом.
+    """
+    from pydicom.dataset import Dataset, FileMetaDataset
     from pydicom.sequence import Sequence
+    from pydicom.uid import ExplicitVRLittleEndian
 
-    from app.services.report_sr import VT_CONTAINER, build_sr_content
-
-    root = build_sr_content(data)
-
+    basic_text_sr = "1.2.840.10008.5.1.4.1.1.88.11"
+    when = verified_at.strftime("%Y%m%d%H%M%S")
     ds = Dataset()
-    ds.Modality = "SR"
-    ds.SeriesDescription = "medviz report (draft)"
-    ds.ValueType = VT_CONTAINER
-    ds.ContinuityOfContent = "SEPARATE"
-    # Черновик, требующий подтверждения (не верифицированное заключение).
-    ds.CompletionFlag = "PARTIAL"
-    ds.VerificationFlag = "UNVERIFIED"
+    ds.file_meta = FileMetaDataset()
+    ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+    ds.file_meta.MediaStorageSOPClassUID = basic_text_sr
+    ds.SpecificCharacterSet = "ISO_IR 192"          # кириллица и узбекская латиница
+    ds.SOPClassUID = basic_text_sr
+    ds.SOPInstanceUID = _uid(report_id, "instance")
+    ds.file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
 
-    content = []
-    for child in root.children:
+    # Пациент и исследование — настоящие (исследование в PACS клиники).
+    ds.PatientName = identity.patient_name
+    ds.PatientID = identity.patient_id
+    ds.PatientBirthDate = ""
+    ds.PatientSex = ""
+    ds.StudyInstanceUID = identity.study_instance_uid
+    ds.StudyDate = study_date.strftime("%Y%m%d") if study_date else ""
+    ds.StudyTime = ""
+    ds.ReferringPhysicianName = ""
+    ds.StudyID = ""
+    ds.AccessionNumber = ""
+
+    # Серия и оборудование.
+    ds.Modality = "SR"
+    ds.SeriesInstanceUID = _uid(report_id, "series")
+    ds.SeriesNumber = 990
+    ds.SeriesDescription = {"uz": "Xulosa (medviz)", "en": "Report (medviz)"}.get(data.language, "Заключение (medviz)")
+    ds.Manufacturer = "medviz"
+
+    # SR Document General.
+    ds.InstanceNumber = 1
+    ds.ContentDate, ds.ContentTime = when[:8], when[8:]
+    ds.CompletionFlag = "COMPLETE"
+    ds.VerificationFlag = "VERIFIED"
+    observer = Dataset()
+    observer.VerifyingObserverName = (data.finalized_by or "unknown").replace(" ", "^")
+    observer.VerifyingOrganization = organization
+    observer.VerificationDateTime = when
+    observer.VerifyingObserverIdentificationCodeSequence = Sequence([])
+    ds.VerifyingObserverSequence = Sequence([observer])
+    ds.PerformedProcedureCodeSequence = Sequence([])
+    ds.ReferencedPerformedProcedureStepSequence = Sequence([])
+
+    # Содержание.
+    ds.ValueType = "CONTAINER"
+    ds.ConceptNameCodeSequence = Sequence([_code("18748-4", "LN", "Diagnostic imaging report")])
+    ds.ContinuityOfContent = "SEPARATE"
+    items = []
+    for i, sentence in enumerate(data.sentences):
         item = Dataset()
         item.RelationshipType = "CONTAINS"
-        item.ValueType = child.value_type
-        item.TextValue = child.text or ""
-        # Трассировка до находки — в TrackingUID.
-        if child.finding_id:
-            item.TrackingUID = child.finding_id
-        content.append(item)
-    ds.ContentSequence = Sequence(content)
-
-    _ = pydicom  # использование импортированного модуля (метаданные файла — на стенде)
+        item.ValueType = "TEXT"
+        item.ConceptNameCodeSequence = Sequence([_code("121071", "DCM", "Finding")])
+        item.TextValue = sentence
+        finding_id = data.sentence_map.get(str(i))
+        if finding_id:
+            item.ObservationUID = "2.25." + str(int(finding_id.replace("-", ""), 16))
+        items.append(item)
+    ds.ContentSequence = Sequence(items)
     return ds
+
+
+def sr_bytes(ds) -> bytes:
+    """Сериализация SR в файл DICOM (Part 10)."""
+    import io
+
+    from pydicom.filewriter import dcmwrite
+
+    buf = io.BytesIO()
+    dcmwrite(buf, ds, enforce_file_format=True)
+    return buf.getvalue()

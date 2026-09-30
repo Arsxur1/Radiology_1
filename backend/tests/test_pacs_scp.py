@@ -18,6 +18,7 @@ from pydicom.dataset import Dataset, FileMetaDataset  # noqa: E402
 from pydicom.uid import ExplicitVRLittleEndian, generate_uid  # noqa: E402
 from pynetdicom import AE, evt  # noqa: E402
 from pynetdicom.sop_class import (  # noqa: E402
+    BasicTextSRStorage,
     CTImageStorage,
     StudyRootQueryRetrieveInformationModelFind,
     StudyRootQueryRetrieveInformationModelMove,
@@ -103,23 +104,33 @@ def dicom_net():
         for ds in instances:
             yield 0xFF00, ds
 
+    stored: list[Dataset] = []
+
+    def on_pacs_store(event):   # PACS принимает, например, заключения SR
+        ds = event.dataset
+        ds.file_meta = event.file_meta
+        stored.append(ds)
+        return 0x0000
+
     hpacs = AE(ae_title=PACS_AET)
     hpacs.add_supported_context(Verification)
+    hpacs.add_supported_context(BasicTextSRStorage, ExplicitVRLittleEndian)
     hpacs.add_supported_context(StudyRootQueryRetrieveInformationModelFind)
     hpacs.add_supported_context(StudyRootQueryRetrieveInformationModelMove)
     hpacs.add_requested_context(CTImageStorage, ExplicitVRLittleEndian)
     pacs_srv = hpacs.start_server(("127.0.0.1", pacs_port), block=False,
-                                  evt_handlers=[(evt.EVT_C_FIND, on_find), (evt.EVT_C_MOVE, on_move)])
+                                  evt_handlers=[(evt.EVT_C_FIND, on_find), (evt.EVT_C_MOVE, on_move),
+                                                (evt.EVT_C_STORE, on_pacs_store)])
     node = PacsNode(aet=PACS_AET, host="127.0.0.1", port=pacs_port, local_aet=RAW_AET)
     try:
-        yield node, received
+        yield node, received, stored
     finally:
         pacs_srv.shutdown()
         raw_srv.shutdown()
 
 
 def test_echo(dicom_net):
-    node, _ = dicom_net
+    node, _, _ = dicom_net
     result = pacs.echo(node)
     assert result.ok, result.detail
 
@@ -130,7 +141,7 @@ def test_echo_unreachable_node():
 
 
 def test_find_by_patient(dicom_net):
-    node, _ = dicom_net
+    node, _, _ = dicom_net
     found = pacs.find_studies(node, StudyQuery(patient_id="MRN-7"))
     by_uid = {s.study_instance_uid: s for s in found.studies}
     assert set(by_uid) == {"1.2.826.0.1.1", "1.2.826.0.1.2"}
@@ -140,13 +151,13 @@ def test_find_by_patient(dicom_net):
 
 
 def test_move_delivers_study_to_raw(dicom_net):
-    node, received = dicom_net
+    node, received, _ = dicom_net
     assert pacs.move_study(node, "1.2.826.0.1.1") is True
     assert len(received) == 2
     assert {d.StudyInstanceUID for d in received} == {"1.2.826.0.1.1"}
 
 
 def test_move_to_unknown_destination_fails(dicom_net):
-    node, received = dicom_net
+    node, received, _ = dicom_net
     assert pacs.move_study(node, "1.2.826.0.1.1", destination_aet="STRANGER") is False
     assert received == []
