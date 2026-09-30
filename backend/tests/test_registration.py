@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 
 from app.models.imaging import Series, Study
@@ -320,3 +322,29 @@ def test_preview_orientation_does_not_depend_on_index_order():
     assert flipped.GetDirection() != fixed.GetDirection()
     identity = sitk.Transform(3, sitk.sitkIdentity)
     assert checkerboard_png(fixed, fixed, identity) == checkerboard_png(flipped, flipped, identity)
+
+
+def test_list_registrations_for_patient(db, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.core.config import get_settings
+    from app.db.session import get_db
+    from app.main import app
+
+    monkeypatch.setattr(get_settings(), "allow_debug_auth", True)
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        c = TestClient(app, raise_server_exceptions=False)
+        h = {"X-Debug-Subject": "dr", "X-Debug-Roles": "radiologist"}
+        fixed, moving = _two_series(db)
+        first = run_registration(db, fixed_series=fixed, moving_series=moving, engine=_FakeEngine())
+        second = registration.queue_registration(db, fixed_series=fixed, moving_series=moving)
+        db.commit()
+        rows = c.get(f"/registration?patient_id={fixed.study.patient_id}", headers=h).json()
+        assert {r["id"] for r in rows} == {str(first.id), str(second.id)}
+        other = c.get(f"/registration?patient_id={uuid.uuid4()}", headers=h).json()
+        assert other == []
+        assert c.get(f"/registration?patient_id={fixed.study.patient_id}",
+                     headers={**h, "X-Debug-Roles": "auditor"}).status_code == 403
+    finally:
+        app.dependency_overrides.clear()

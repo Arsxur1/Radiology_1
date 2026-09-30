@@ -143,13 +143,19 @@ export function ModalityRegistration() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [previous, setPrevious] = useState<RegistrationOut[]>([]);
+
   useEffect(() => {
     if (!patientId) return;
     api
       .listStudies(undefined, patientId)
       .then(setStudies)
       .catch((e) => setErr(e instanceof ApiError ? e.message : String(e)));
-  }, [patientId]);
+    api
+      .listRegistrations(patientId)
+      .then(setPrevious)
+      .catch(() => setPrevious([]));
+  }, [patientId, result?.review_status]);
 
   // Плоский список серий пациента (по всем исследованиям).
   const options: SeriesOption[] = useMemo(
@@ -157,7 +163,10 @@ export function ModalityRegistration() {
       studies.flatMap((s) =>
         s.series.map((se) => ({
           id: se.id,
-          label: `${se.modality} · ${se.description ?? s.description ?? s.study_instance_uid}`,
+          // Дата и короткий номер серии: у повторных исследований описания часто совпадают.
+          label: `${se.modality} · ${s.study_date ? new Date(s.study_date).toLocaleDateString("ru-RU") + " · " : ""}${
+            se.description ?? s.description ?? s.study_instance_uid
+          } · #${se.id.slice(0, 4)}`,
         })),
       ),
     [studies],
@@ -276,6 +285,37 @@ export function ModalityRegistration() {
         )}
         {err && <div className="error">Ошибка: {err}</div>}
       </section>
+
+      {previous.length > 0 && (
+        <section className="card">
+          <strong>Совмещения пациента</strong>
+          <table style={{ marginTop: 6 }}>
+            <tbody>
+              {previous.map((r) => {
+                const label = (id: string) => options.find((o) => o.id === id)?.label ?? id.slice(0, 8);
+                return (
+                  <tr key={r.id}>
+                    <td>
+                      {label(r.moving_series_id)} → {label(r.fixed_series_id)}
+                    </td>
+                    <td>{STAGE_RU[r.stage] ?? r.stage}</td>
+                    <td>
+                      <ReviewBadge r={r} />
+                    </td>
+                    <td>
+                      {result?.id === r.id ? (
+                        <span className="muted">открыто</span>
+                      ) : (
+                        <button onClick={() => setResult(r)}>Открыть</button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {result && (
         <section className="card">

@@ -216,6 +216,7 @@ export interface RegistrationOut {
   usable_for_measurements: boolean;
   review_blockers: string[];
   has_preview: boolean;
+  created_at?: string;
 }
 
 export interface RegistrationStageQuality {

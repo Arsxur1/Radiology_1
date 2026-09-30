@@ -224,6 +224,7 @@ export const api = {
     }),
 
   getRegistration: (id: string) => request<RegistrationOut>(`/registration/${id}`),
+  listRegistrations: (patientId: string) => request<RegistrationOut[]>(`/registration?patient_id=${patientId}`),
   publishRegistration: (id: string) =>
     request<RegistrationOut>(`/registration/${id}/publish`, { method: "POST" }),
   registrationPreviewUrl: (id: string) => requestBlobUrl(`/registration/${id}/preview`),

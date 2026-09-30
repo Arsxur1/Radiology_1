@@ -95,6 +95,27 @@ def run(
     return _out(reg)
 
 
+@router.get("", response_model=list[RegistrationOut])
+def list_registrations(
+    patient_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.ADMIN, Role.RESEARCHER, Role.RADIOLOGIST)),
+) -> list[RegistrationOut]:
+    """Совмещения пациента, новые сверху — чтобы вернуться к проверке или публикации."""
+    from sqlalchemy import select
+
+    from app.models.imaging import Study
+
+    rows = db.execute(
+        select(Registration)
+        .join(Series, Registration.fixed_series_id == Series.id)
+        .join(Study, Series.study_id == Study.id)
+        .where(Study.patient_id == patient_id)
+        .order_by(Registration.created_at.desc())
+    ).scalars().all()
+    return [_out(r) for r in rows]
+
+
 @router.get("/{registration_id}", response_model=RegistrationOut)
 def get_registration(registration_id: uuid.UUID, db: Session = Depends(get_db)) -> RegistrationOut:
     reg = db.get(Registration, registration_id)
