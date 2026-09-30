@@ -10,6 +10,8 @@
 #                            Ключ хранить отдельно от копий (иначе шифрование бессмысленно).
 # Расписание — systemd-таймер infra/backup/ (make backup-install), каждую ночь.
 set -euo pipefail
+# Копии — только для владельца: в них снимки, хеши паролей и (если без ключа) ФИО.
+umask 077
 
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ROOT="$(realpath -m "${BACKUP_DIR:-./backups}")"
@@ -39,6 +41,19 @@ if [ -n "$KEY" ]; then
 else
   echo "  ВНИМАНИЕ: BACKUP_ENCRYPT_KEY_FILE не задан — ФИО и номера карт в копии не зашифрованы" >&2
   dump_idmap > "$DEST/medviz_idmap.sql.gz"
+fi
+
+echo "→ PostgreSQL (учётные записи сотрудников, Keycloak)"
+# Хеши паролей сотрудников — шифруются тем же ключом, что и идентифицирующий контур.
+if docker compose ps --services --status running 2>/dev/null | grep -qx postgres-keycloak; then
+  dump_kc() { docker compose exec -T postgres-keycloak pg_dump -U keycloak keycloak | gzip; }
+  if [ -n "$KEY" ]; then
+    dump_kc | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass "file:$KEY" > "$DEST/keycloak.sql.gz.enc"
+  else
+    dump_kc > "$DEST/keycloak.sql.gz"
+  fi
+else
+  echo "  postgres-keycloak не запущен — учётные записи не сохранены" >&2
 fi
 
 echo "→ Объектное хранилище (снимки, маски, контуры SEG)"

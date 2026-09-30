@@ -17,7 +17,7 @@ if [ -f "$SRC/SHA256SUMS" ]; then
   ( cd "$SRC" && sha256sum --quiet -c SHA256SUMS ) || { echo "Контрольные суммы не сошлись — копия повреждена" >&2; exit 1; }
   echo "Контрольные суммы сошлись"
 fi
-if [ -f "$SRC/medviz_idmap.sql.gz.enc" ] && [ -z "$KEY" ]; then
+if { [ -f "$SRC/medviz_idmap.sql.gz.enc" ] || [ -f "$SRC/keycloak.sql.gz.enc" ]; } && [ -z "$KEY" ]; then
   echo "Копия идентифицирующего контура зашифрована: укажите BACKUP_ENCRYPT_KEY_FILE" >&2; exit 1
 fi
 [ "${2:-}" = "--yes" ] || { read -r -p "Данные будут перезаписаны из $SRC. Продолжить? [yes/N] " a; [ "$a" = "yes" ]; }
@@ -45,6 +45,18 @@ if [ -f "$SRC/medviz_idmap.sql.gz.enc" ]; then
 else
   gunzip -c "$SRC/medviz_idmap.sql.gz"
 fi | docker compose exec -T postgres-idmap psql -q -v ON_ERROR_STOP=1 -U "$IDU" -d "$IDD" >/dev/null
+
+if [ -f "$SRC/keycloak.sql.gz.enc" ] || [ -f "$SRC/keycloak.sql.gz" ]; then
+  echo "→ PostgreSQL (учётные записи сотрудников, Keycloak)"
+  docker compose stop keycloak >/dev/null 2>&1 || true
+  recreate postgres-keycloak keycloak keycloak
+  if [ -f "$SRC/keycloak.sql.gz.enc" ]; then
+    openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass "file:$KEY" -in "$SRC/keycloak.sql.gz.enc" | gunzip -c
+  else
+    gunzip -c "$SRC/keycloak.sql.gz"
+  fi | docker compose exec -T postgres-keycloak psql -q -v ON_ERROR_STOP=1 -U keycloak -d keycloak >/dev/null
+  docker compose start keycloak >/dev/null 2>&1 || true
+fi
 
 echo "→ Объектное хранилище"
 $S3_SYNC restore "$S3_DIR"
