@@ -1,0 +1,10 @@
+[Unit]
+Description=medviz: ночной бэкап в 02:17
+
+[Timer]
+OnCalendar=*-*-* 02:17:00
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

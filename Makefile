@@ -1,4 +1,4 @@
-.PHONY: help up down logs build migrate revision test lint fmt seed backup check-pacs xrv-candidate totalseg-candidate restore keycloak-configure
+.PHONY: help up down logs build migrate revision test lint fmt seed backup backup-install check-pacs xrv-candidate totalseg-candidate restore keycloak-configure
 
 help:
 	@echo "up         — поднять весь стек (docker compose up -d --build)"
@@ -10,6 +10,7 @@ help:
 	@echo "lint       — ruff check"
 	@echo "fmt        — ruff format"
 	@echo "backup     — бэкап PostgreSQL (оба контура) + S3 + веса моделей"
+	@echo "backup-install — ночной бэкап по расписанию (systemd), ключ шифрования /etc/medviz/backup.key"
 	@echo "keycloak-configure — адрес сервера в клиенты входа Keycloak (после установки/смены IP)"
 	@echo "restore    — восстановление: make restore BACKUP=backups/<дата-время>"
 	@echo "check-pacs — проверить связь с настроенным PACS (.env)"
@@ -47,6 +48,19 @@ fmt:
 
 backup:
 	bash scripts/backup.sh
+
+# Ночной бэкап по расписанию (root). BACKUP_DIR — лучше отдельный диск.
+BACKUP_DIR ?= $(CURDIR)/backups
+backup-install:
+	@test "$$(id -u)" = 0 || { echo "Нужен root (sudo make backup-install)"; exit 1; }
+	install -d -m 700 /etc/medviz
+	@test -f /etc/medviz/backup.key || { umask 077; openssl rand -base64 48 > /etc/medviz/backup.key; \
+	  echo "Создан ключ /etc/medviz/backup.key — СКОПИРУЙТЕ его в сейф: без него копию ФИО не восстановить"; }
+	sed -e 's#__MEDVIZ_DIR__#$(CURDIR)#g' -e 's#__BACKUP_DIR__#$(BACKUP_DIR)#g' \
+	  infra/backup/medviz-backup.service > /etc/systemd/system/medviz-backup.service
+	install -m 644 infra/backup/medviz-backup.timer /etc/systemd/system/medviz-backup.timer
+	systemctl daemon-reload && systemctl enable --now medviz-backup.timer
+	systemctl list-timers medviz-backup.timer
 
 # Восстановление: make restore BACKUP=backups/<дата-время>  (перезаписывает данные!)
 restore:

@@ -1,0 +1,15 @@
+# Ночной бэкап платформы (ТЗ, раздел 7). Устанавливается: make backup-install
+[Unit]
+Description=medviz: резервная копия (PostgreSQL x2, S3, веса моделей)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=__MEDVIZ_DIR__
+EnvironmentFile=-__MEDVIZ_DIR__/.env
+Environment=BACKUP_DIR=__BACKUP_DIR__
+Environment=BACKUP_KEEP=14
+Environment=BACKUP_ENCRYPT_KEY_FILE=/etc/medviz/backup.key
+ExecStart=/usr/bin/env bash scripts/backup.sh
+# Ошибка видна в журнале: journalctl -u medviz-backup
