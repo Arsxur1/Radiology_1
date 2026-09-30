@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
 import type { FindingOut } from "../api/types";
+import { MeshViewer } from "./MeshViewer";
 
 function StatusBadge({ f }: { f: FindingOut }) {
   if (f.confirmation_status === "confirmed")
@@ -108,6 +109,7 @@ function HeatmapView({ finding }: { finding: FindingOut }) {
 function MeshPanel({ finding, onChange }: { finding: FindingOut; onChange: (f: FindingOut) => void }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [show3d, setShow3d] = useState(false);
   const mesh = finding.mesh;
 
   useEffect(() => {
@@ -169,8 +171,10 @@ function MeshPanel({ finding, onChange }: { finding: FindingOut; onChange: (f: F
           <button onClick={() => download("glb")} title="Для просмотра (glTF)">
             GLB
           </button>
+          <button onClick={() => setShow3d(!show3d)}>{show3d ? "Скрыть 3D" : "Показать 3D"}</button>
         </div>
       )}
+      {mesh?.status === "ready" && show3d && <MeshViewer findingId={finding.id} />}
       {err && <div className="error">{err}</div>}
     </div>
   );
