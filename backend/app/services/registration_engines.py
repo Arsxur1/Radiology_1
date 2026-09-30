@@ -26,6 +26,9 @@ WORK_SPACING_MM = 2.0      # рабочая сетка: не мельче 2 мм
 # Один поток: уже при двух результат аффинной стадии плавает между запусками
 # (проверено повторными прогонами), а воспроизводимость обязательна (FR-6).
 THREADS = 1
+# Оптимизация B-сплайна многопоточно воспроизводима (повторные прогоны совпадают до 9-го
+# знака) и в 2–3 раза быстрее; оценки метрики для отчёта о качестве — всё равно в один поток.
+DEFORMABLE_THREADS = 4
 BSPLINE_MESH_MM = 50.0     # шаг сетки контрольных точек B-сплайна
 BSPLINE_ITERATIONS = 100   # лимит итераций L-BFGS-B на уровень пирамиды
 
@@ -165,7 +168,11 @@ def register_images(fixed, moving, up_to_stage: RegistrationStage) -> tuple:
         reg.SetShrinkFactorsPerLevel([2, 1])
         reg.SetSmoothingSigmasPerLevel([1, 0])
         reg.SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
-        reg.Execute(fixed, moving)
+        sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(DEFORMABLE_THREADS)
+        try:
+            reg.Execute(fixed, moving)
+        finally:
+            sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(THREADS)
         field = sitk.TransformToDisplacementField(bspline, sitk.sitkVectorFloat64, fixed.GetSize(),
                                                   fixed.GetOrigin(), fixed.GetSpacing(), fixed.GetDirection())
         jac = sitk.DisplacementFieldJacobianDeterminant(field)
@@ -233,10 +240,16 @@ def checkerboard_png(fixed, moving, transform, squares: int = 8) -> bytes:
     from PIL import Image
 
     resampled = sitk.Resample(moving, fixed, transform, sitk.sitkLinear, float(_min_value(moving)))
+    # Индексы массива — не анатомические оси: приводим к LPS, чтобы срезы показывались как
+    # принято в радиологии (правая сторона пациента слева, передняя стенка сверху, голова сверху).
+    fixed, resampled = sitk.DICOMOrient(fixed, "LPS"), sitk.DICOMOrient(resampled, "LPS")
 
     def norm(img):
         a = sitk.GetArrayFromImage(img).astype(np.float32)  # (z, y, x)
-        lo, hi = np.percentile(a, [1, 99])
+        if a.min() < -900:          # КТ в HU: мягкотканное окно, иначе воздух «съедает» контраст
+            lo, hi = -160.0, 240.0
+        else:
+            lo, hi = np.percentile(a, [1, 99])
         return np.clip((a - lo) / max(hi - lo, 1e-6), 0, 1)
 
     f, m = norm(fixed), norm(resampled)

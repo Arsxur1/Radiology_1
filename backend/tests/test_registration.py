@@ -295,3 +295,28 @@ def test_publish_only_after_approval(db, monkeypatch):
         assert queued == [reg.id]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_deformable_stage_is_reproducible():
+    """B-сплайн оптимизируется многопоточно — повторный прогон обязан совпасть (FR-6)."""
+    from app.services.registration_engines import register_images
+
+    sitk, fixed, moving = _phantom()
+    fixed, moving = fixed[::2, ::2, ::2], moving[::2, ::2, ::2]      # меньше вокселей — быстрее тест
+    t1, q1, _, _ = register_images(fixed, moving, RegistrationStage.DEFORMABLE)
+    t2, q2, _, _ = register_images(fixed, moving, RegistrationStage.DEFORMABLE)
+    assert q1["stages"] == q2["stages"]
+    p = fixed.TransformContinuousIndexToPhysicalPoint([10, 12, 8])
+    assert t1.TransformPoint(p) == t2.TransformPoint(p)
+
+
+def test_preview_orientation_does_not_depend_on_index_order():
+    """Превью строится в анатомических осях: тот же объём, записанный с другим порядком
+    индексов (направляющие косинусы −1), даёт ту же картинку."""
+    from app.services.registration_engines import checkerboard_png
+
+    sitk, fixed, _ = _phantom()
+    flipped = sitk.Flip(fixed, [True, True, False])        # физически тот же объём
+    assert flipped.GetDirection() != fixed.GetDirection()
+    identity = sitk.Transform(3, sitk.sitkIdentity)
+    assert checkerboard_png(fixed, fixed, identity) == checkerboard_png(flipped, flipped, identity)
