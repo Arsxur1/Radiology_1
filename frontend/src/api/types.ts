@@ -306,3 +306,18 @@ export interface PriorOut {
   is_current: boolean;
   imported_study_id: string | null;
 }
+
+export interface SystemCheck {
+  name: string;
+  ok: boolean;
+  warn: boolean;
+  detail: string;
+  ms: number;
+}
+
+export interface SystemStatusOut {
+  status: "ok" | "degraded" | "down";
+  functions: Record<string, "ok" | "degraded" | "down">;
+  checks: SystemCheck[];
+  checked_at: number;
+}

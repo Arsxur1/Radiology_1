@@ -35,15 +35,21 @@ def _operations():
 def test_every_non_public_endpoint_requires_auth(client):
     open_ = []
     for method, path in _operations():
+        if (method, path) in PUBLIC:
+            continue                     # публичные проверяет test_public_endpoints_stay_public
         code = client.request(method, re.sub(r"\{[^}]+\}", DUMMY, path), json={}).status_code
-        if (method, path) not in PUBLIC and code not in (401, 403):
+        if code not in (401, 403):
             open_.append((method, path, code))
     assert open_ == [], f"Эндпоинты без аутентификации: {open_}"
 
 
-def test_public_endpoints_stay_public(client):
+def test_public_endpoints_stay_public(client, monkeypatch):
+    from app.services import system_status as ss
+
+    # /ready — настоящие проверки (без сервисов в тестах был бы 503): подменяем их быстрыми.
+    monkeypatch.setattr(ss, "collect", lambda: ss.summarize([]))
     for method, path in PUBLIC:
-        assert client.request(method, path).status_code == 200
+        assert client.request(method, path).status_code == 200, path
 
 
 def _as(role):

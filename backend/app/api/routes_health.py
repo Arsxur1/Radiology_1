@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 
 router = APIRouter(tags=["health"])
 
@@ -13,6 +13,12 @@ def health() -> dict:
 
 
 @router.get("/ready")
-def ready() -> dict:
-    # Просмотр и архив не зависят от модуля ИИ (на этапе 1 моделей нет).
-    return {"viewer": "ok", "ingest": "ok", "ai": "disabled_stage_1"}
+def ready(response: Response) -> dict:
+    """Готовность по функциям: просмотр, приём, ИИ (ok / degraded / down). Без подробностей —
+    эндпоинт публичный. 503, если не работает просмотр: без него платформа бесполезна (SR-4)."""
+    from app.services.system_status import collect
+
+    st = collect()
+    if st["functions"]["viewer"] == "down":
+        response.status_code = 503
+    return {"status": st["status"], **st["functions"]}

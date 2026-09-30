@@ -58,4 +58,9 @@ if [ "$KEEP" -gt 0 ]; then
     | sort | head -n "-$KEEP" | while read -r old; do echo "  удаляю $old"; rm -rf -- "$old"; done
 fi
 ln -sfn "$DEST" "$ROOT/latest"
-echo "Готово: $DEST ($(du -sh "$DEST" | cut -f1))"
+SIZE="$(du -sh "$DEST" | cut -f1)"
+# Отметка для панели «Состояние системы» (без путей к данным пациентов — только время и размер).
+docker compose exec -T redis redis-cli SET medviz:backup:last \
+  "{\"ts\": $(date +%s), \"size\": \"$SIZE\", \"stamp\": \"$STAMP\"}" >/dev/null 2>&1 \
+  || echo "  (отметка о бэкапе в Redis не записана — панель состояния её не увидит)" >&2
+echo "Готово: $DEST ($SIZE)"

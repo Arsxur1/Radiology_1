@@ -23,6 +23,7 @@ from app.api import (
     routes_reports,
     routes_segmentation,
     routes_studies,
+    routes_system,
     routes_temporal,
     routes_vocabulary,
 )
@@ -72,6 +73,7 @@ app.include_router(routes_patients.router, dependencies=_AUTH)
 app.include_router(routes_registration.router, dependencies=_AUTH)
 app.include_router(routes_vocabulary.router, dependencies=_AUTH)
 app.include_router(routes_pilot.router, dependencies=_AUTH)
+app.include_router(routes_system.router, dependencies=_AUTH)
 
 
 @app.get("/")

@@ -21,6 +21,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("orthanc_watcher")
 
 CURSOR_KEY = "medviz:orthanc-raw:changes-cursor"
+# Пульс: время последнего УСПЕШНОГО опроса — по нему «Состояние системы» видит, жив ли приём.
+HEARTBEAT_KEY = "medviz:orthanc-watcher:heartbeat"
 POLL_SECONDS = 2.0
 
 
@@ -36,6 +38,9 @@ class RedisCursor:
 
     def set(self, value: int) -> None:
         self._r.set(CURSOR_KEY, value)
+
+    def beat(self) -> None:
+        self._r.set(HEARTBEAT_KEY, str(time.time()), ex=3600)
 
 
 def poll_once(client, cursor, dispatch: Callable[[str], None], limit: int = 100) -> int:
@@ -68,6 +73,7 @@ def main() -> None:  # pragma: no cover - бесконечный цикл сер
         client = raw_client()
         try:
             n = poll_once(client, cursor, lambda iid: process_raw_instance.delay(iid))
+            cursor.beat()
             if n:
                 logger.info("Поставлено в обработку: %d", n)
         except Exception:  # noqa: BLE001 - Orthanc/Redis временно недоступны — повторим

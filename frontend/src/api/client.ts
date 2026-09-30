@@ -9,6 +9,7 @@ import type {
   FindingOut,
   IdentityOut,
   PriorOut,
+  SystemStatusOut,
   ModeOut,
   ModelOut,
   OperatingMode,
@@ -95,6 +96,8 @@ export const api = {
     request<VocabularyConcept[]>(`/vocabulary/chest-findings?modality=${encodeURIComponent(modality)}`),
   createFinding: (payload: { series_id: string; code: string; time_spent_seconds: number }) =>
     request<FindingOut>("/findings", { method: "POST", body: JSON.stringify({ measurements: {}, ...payload }) }),
+
+  systemStatus: () => request<SystemStatusOut>("/system/status"),
 
   pilotDashboard: (weeks = 12) => request<PilotDashboard>(`/pilot/dashboard?weeks=${weeks}`),
 

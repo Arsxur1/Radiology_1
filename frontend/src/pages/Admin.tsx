@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
+import { SystemStatus } from "../components/SystemStatus";
 import type {
   ModeOut,
   ModelOut,
@@ -481,6 +482,7 @@ export function Admin() {
   return (
     <div className="layout">
       <h2>Администрирование</h2>
+      <SystemStatus />
       <ModesSection />
       <ModelsSection />
     </div>
