@@ -10,6 +10,7 @@ import type { FindingOut, ReportOut, StudyOut } from "../api/types";
 import { hasRole } from "../auth";
 import { AddFindingForm } from "../components/AddFindingForm";
 import { FindingCard } from "../components/FindingCard";
+import { PacsPriors } from "../components/PacsPriors";
 import { PatientIdentity } from "../components/PatientIdentity";
 
 export function StudyReview() {
@@ -89,6 +90,7 @@ export function StudyReview() {
         {study.modality} · {study.description ?? study.study_instance_uid}
       </h2>
       {hasRole("radiologist", "clinician") && <PatientIdentity studyId={study.id} />}
+      {hasRole("radiologist", "clinician") && <PacsPriors studyId={study.id} />}
 
       {study.series.map((se) => (
         <section key={se.id} style={{ marginBottom: 20 }}>

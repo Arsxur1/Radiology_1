@@ -60,7 +60,7 @@ class StudyQuery:
     accession_number: str | None = None
     study_instance_uid: str | None = None
 
-    def to_find_identifier(self):  # pragma: no cover - требует pydicom/pynetdicom
+    def to_find_identifier(self):
         """Собрать DICOM-идентификатор запроса уровня STUDY."""
         from pydicom.dataset import Dataset
 
@@ -115,7 +115,7 @@ class PacsUnavailable(Exception):
     """PACS недоступен или библиотека DICOM-сети не установлена."""
 
 
-def _require_pynetdicom():  # pragma: no cover - требует установленного пакета
+def _require_pynetdicom():
     try:
         import pynetdicom  # noqa: F401
     except Exception as e:  # noqa: BLE001
@@ -125,7 +125,7 @@ def _require_pynetdicom():  # pragma: no cover - требует установл
         ) from e
 
 
-def echo(node: PacsNode, timeout: int = 10) -> EchoResult:  # pragma: no cover - сеть
+def echo(node: PacsNode, timeout: int = 10) -> EchoResult:
     """C-ECHO: проверка связи с PACS (verification SOP)."""
     _require_pynetdicom()
     from pynetdicom import AE
@@ -144,7 +144,7 @@ def echo(node: PacsNode, timeout: int = 10) -> EchoResult:  # pragma: no cover -
         assoc.release()
 
 
-def find_studies(node: PacsNode, query: StudyQuery, timeout: int = 30) -> QueryOutcome:  # pragma: no cover - сеть
+def find_studies(node: PacsNode, query: StudyQuery, timeout: int = 30) -> QueryOutcome:
     """C-FIND: получить список исследований по критериям."""
     _require_pynetdicom()
     from pynetdicom import AE
@@ -180,7 +180,7 @@ def find_studies(node: PacsNode, query: StudyQuery, timeout: int = 30) -> QueryO
 
 def move_study(
     node: PacsNode, study_instance_uid: str, destination_aet: str | None = None
-) -> bool:  # pragma: no cover - сеть
+) -> bool:
     """C-MOVE: попросить PACS отправить исследование на наш приёмный AE (Orthanc raw).
 
     destination_aet по умолчанию — наш local_aet; PACS должен знать его как

@@ -289,3 +289,14 @@ export interface IdentityOut {
   original_study_instance_uid: string | null;
   purpose: string;
 }
+
+/** Исследование пациента в PACS клиники — без PHI; token заменяет исходный UID. */
+export interface PriorOut {
+  token: string;
+  study_date: string | null;
+  modality: string | null;
+  description: string | null;
+  series_count: number | null;
+  is_current: boolean;
+  imported_study_id: string | null;
+}

@@ -219,3 +219,71 @@ def reveal_identity(
     return IdentityOut(patient_name=name, patient_mrn=row.real_mrn,
                        original_study_instance_uid=row.real_study_instance_uid,
                        purpose=IDENTITY_PURPOSES[purpose])
+
+
+# --- Предыдущие исследования пациента из PACS (FR-1, FR-7) ---
+
+class PriorOut(BaseModel):
+    token: str
+    study_date: str | None
+    modality: str | None
+    description: str | None
+    series_count: int | None
+    is_current: bool
+    imported_study_id: uuid.UUID | None
+
+
+def _priors_context(db: Session, study_id: uuid.UUID):
+    from app.services.pacs import default_node_from_settings
+
+    study = db.get(Study, study_id)
+    if study is None:
+        raise HTTPException(status_code=404, detail="Исследование не найдено")
+    return study, default_node_from_settings()
+
+
+@router.get("/{study_id}/pacs-priors", response_model=list[PriorOut])
+def pacs_priors(
+    study_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    idmap: Session = Depends(get_idmap_db),
+    user: CurrentUser = Depends(require_roles(Role.RADIOLOGIST, Role.CLINICIAN)),
+) -> list[PriorOut]:
+    """Исследования того же пациента в PACS клиники — без ФИО, номера карты и исходных UID."""
+    from app.services import pacs_priors as pp
+
+    study, node = _priors_context(db, study_id)
+    try:
+        found = pp.find_priors(db, idmap, study, node=node, finder=pp.pacs.find_studies)
+    except pp.PriorsUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    audit.record_access(db, user, AuditAction.PATIENT_ACCESS, entity_type="pacs_priors", entity_id=study.id,
+                        details={"what": "поиск предыдущих исследований в PACS", "found": len(found)})
+    return [PriorOut(**p.__dict__) for p in found]
+
+
+@router.post("/{study_id}/pacs-priors/{token}/retrieve")
+def retrieve_pacs_prior(
+    study_id: uuid.UUID,
+    token: str,
+    db: Session = Depends(get_db),
+    idmap: Session = Depends(get_idmap_db),
+    user: CurrentUser = Depends(require_roles(Role.RADIOLOGIST, Role.CLINICIAN)),
+) -> dict:
+    """Попросить PACS прислать исследование; оно пройдёт обычный приём и обезличивание."""
+    from app.services import pacs_priors as pp
+
+    study, node = _priors_context(db, study_id)
+    try:
+        ok = pp.retrieve_prior(db, idmap, study, token, node=node,
+                               finder=pp.pacs.find_studies, mover=pp.pacs.move_study)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except pp.PriorsUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    audit.record_access(db, user, AuditAction.STUDY_INGEST, entity_type="pacs_priors", entity_id=study.id,
+                        details={"what": "запрос выгрузки предыдущего исследования из PACS", "ok": ok})
+    if not ok:
+        raise HTTPException(status_code=502, detail="PACS не выполнил выгрузку (проверьте, что узел "
+                            "платформы зарегистрирован в PACS как адресат C-MOVE)")
+    return {"requested": True, "detail": "Исследование запрошено; появится после приёма и обезличивания"}

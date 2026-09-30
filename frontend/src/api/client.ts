@@ -8,6 +8,7 @@ import type {
   DriftSlice,
   FindingOut,
   IdentityOut,
+  PriorOut,
   ModeOut,
   ModelOut,
   OperatingMode,
@@ -79,6 +80,11 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  pacsPriors: (studyId: string) => request<PriorOut[]>(`/studies/${studyId}/pacs-priors`),
+  retrievePacsPrior: (studyId: string, token: string) =>
+    request<{ requested: boolean; detail: string }>(`/studies/${studyId}/pacs-priors/${token}/retrieve`, {
+      method: "POST",
+    }),
   revealIdentity: (studyId: string, purpose: string) =>
     request<IdentityOut>(`/studies/${studyId}/identity?purpose=${encodeURIComponent(purpose)}`),
 
