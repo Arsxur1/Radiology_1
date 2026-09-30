@@ -43,24 +43,25 @@ services:
 
   # ─── Объектное хранилище ──────────────────────────────────────────────────
   minio:
-    # Образ настраивается: если minio/minio недоступен в вашем реестре — укажите
-    # зеркало/свою сборку в MINIO_IMAGE (любое S3-совместимое хранилище).
-    image: ${MINIO_IMAGE:-minio/minio:latest}
+    # S3-совместимое хранилище (имя сервиса историческое). По умолчанию — SeaweedFS:
+    # образ minio/minio больше не публикуется на Docker Hub. Свой MinIO — см.
+    # docker-compose.minio.yml. Ключи доступа — MINIO_ROOT_USER / MINIO_ROOT_PASSWORD.
+    image: ${S3_IMAGE:-chrislusf/seaweedfs:4.48}
     restart: unless-stopped
-    command: server /data --console-address ":9001"
+    entrypoint: ["/bin/sh", "/etc/medviz/seaweedfs-start.sh"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
+      - ./infra/s3/seaweedfs-start.sh:/etc/medviz/seaweedfs-start.sh:ro
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9000/healthz"]
       interval: 15s
       timeout: 5s
-      retries: 5
+      retries: 10
     ports:
       - "9000:9000"
-      - "9001:9001"
 
   # ─── DICOM-узлы ───────────────────────────────────────────────────────────
   orthanc-raw:

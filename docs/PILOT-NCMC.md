@@ -11,9 +11,11 @@
 
 - [ ] **ИТ** Сервер: Linux, 8 CPU, 32 ГБ ОЗУ, 500 ГБ диска, Docker + Compose.
 - [ ] **ИТ** `cp .env.example .env`, заменить все `change_me_*` на сложные пароли.
-- [ ] **ИТ** Заранее проверить доступность образов: `docker compose pull`. Если `minio/minio`
-      не скачивается (MinIO ограничивает публикацию бесплатных образов), указать в `.env`
-      `MINIO_IMAGE` — зеркало или другое S3-совместимое хранилище.
+- [ ] **ИТ** Заранее проверить доступность образов: `docker compose pull`. Объектное
+      хранилище по умолчанию — SeaweedFS (`chrislusf/seaweedfs:4.48`, проверено на стенде
+      вместе со всей платформой): образ `minio/minio` на Docker Hub больше не публикуется.
+      Если в клинике уже есть свой образ MinIO: `MINIO_IMAGE=<образ>` и
+      `docker compose -f docker-compose.yml -f docker-compose.minio.yml up -d`.
 - [ ] **ИТ** `make up && make migrate && make seed`.
 - [ ] **ИТ** Вход врачей (Keycloak): в `.env` — `KEYCLOAK_PUBLIC_URL=http://<IP сервера>:8080`,
       `ALLOW_DEBUG_AUTH=false`; `make up`, затем `make keycloak-configure` — он же включает

@@ -28,7 +28,7 @@
 | Слой | Компонент |
 |---|---|
 | DICOM-узел | Orthanc (C-STORE, C-FIND, DICOMweb) |
-| Объектное хранилище | MinIO (S3-совместимое) |
+| Объектное хранилище | S3-совместимое: SeaweedFS по умолчанию (образ MinIO больше не публикуется на Docker Hub), MinIO — через `docker-compose.minio.yml` |
 | Метаданные | PostgreSQL 16 (+ JSONB) |
 | Очередь задач | Celery + Redis |
 | Backend API | FastAPI (Python) |
@@ -64,7 +64,7 @@ make seed                 # (опционально) демо-данные дл�
 | Backend API (Swagger) | http://localhost:8000/docs |
 | OHIF Viewer | http://localhost:3000 |
 | Orthanc | http://localhost:8042 |
-| MinIO Console | http://localhost:9001 |
+| S3 (объекты) | http://localhost:9000 (только по ключам из `.env`) |
 | Keycloak | http://localhost:8080 |
 
 ## Разработка
