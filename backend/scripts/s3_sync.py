@@ -61,9 +61,10 @@ def rebuild_viewer() -> dict:
 
     s = get_settings()
     client, orthanc = get_minio(), clean_client()
-    counts = {"images": 0, "seg": 0}
+    counts = {"images": 0, "seg": 0, "registered": 0}
     try:
-        for bucket, prefix, kind in ((s.bucket_images, "", "images"), (s.bucket_masks, "seg/", "seg")):
+        for bucket, prefix, kind in ((s.bucket_images, "", "images"), (s.bucket_masks, "seg/", "seg"),
+                                     (s.bucket_masks, "registered/", "registered")):
             for obj in client.list_objects(bucket, prefix=prefix, recursive=True):
                 if not obj.object_name.endswith(".dcm"):
                     continue

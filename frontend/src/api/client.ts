@@ -220,6 +220,8 @@ export const api = {
     }),
 
   getRegistration: (id: string) => request<RegistrationOut>(`/registration/${id}`),
+  publishRegistration: (id: string) =>
+    request<RegistrationOut>(`/registration/${id}/publish`, { method: "POST" }),
   registrationPreviewUrl: (id: string) => requestBlobUrl(`/registration/${id}/preview`),
   reviewRegistration: (id: string, approved: boolean) =>
     request<RegistrationOut>(`/registration/${id}/review`, {

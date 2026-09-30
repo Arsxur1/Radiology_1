@@ -138,3 +138,31 @@ def preview(
         raise HTTPException(status_code=404, detail="Превью нет")
     return Response(content=storage.get_object_ref(ref), media_type="image/png",
                     headers={"Cache-Control": "private, max-age=300"})
+
+
+def enqueue_publish(registration_id: uuid.UUID) -> None:
+    from app.workers.celery_app import celery_app
+
+    celery_app.send_task("registration.publish", args=[str(registration_id)])
+
+
+@router.post("/{registration_id}/publish", response_model=RegistrationOut)
+def publish(
+    registration_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.RADIOLOGIST)),
+) -> RegistrationOut:
+    """Показать совмещённую серию в просмотрщике. Только после подтверждения качества врачом."""
+    from app.models.registration import RegistrationReview
+
+    reg = db.get(Registration, registration_id)
+    if reg is None:
+        raise HTTPException(status_code=404, detail="Совмещение не найдено")
+    if reg.review_status != RegistrationReview.APPROVED:
+        raise HTTPException(status_code=409, detail="Публикуется только совмещение, подтверждённое врачом")
+    if not reg.transform_ref:
+        raise HTTPException(status_code=409, detail="Нет сохранённого преобразования (демо-заглушка)")
+    reg.quality = {**(reg.quality or {}), "published": {"status": "queued"}}
+    db.commit()
+    enqueue_publish(reg.id)
+    return _out(reg)

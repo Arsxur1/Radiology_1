@@ -227,3 +227,71 @@ def test_quality_warnings_rules():
     assert codes["affine_reverted"] is False
     assert codes["folding"] is True
     assert "mi_decreased" in codes and "low_overlap" in codes
+
+
+# --- Совмещённая серия для просмотрщика ---
+
+def test_resampled_series_matches_fixed_geometry(tmp_path):
+    """Moving, пересчитанная на сетку fixed по верному преобразованию, совпадает с fixed
+    и читается обратно как обычная DICOM-серия той же геометрии."""
+    np = pytest.importorskip("numpy")
+    sitk, fixed, _ = _phantom()
+    from pydicom.dataset import Dataset
+
+    from app.services.registration_publish import dataset_bytes, resampled_series
+
+    t = sitk.Euler3DTransform((0, 0, 0), 0.0, 0.0, float(np.deg2rad(8)), (5.0, -4.0, 3.0))
+    t.SetCenter(fixed.TransformContinuousIndexToPhysicalPoint([32, 32, 24]))
+    moving = sitk.Resample(fixed, fixed, t, sitk.sitkLinear, 0)       # m(x) = f(t(x))
+    template = Dataset()
+    template.PatientID, template.StudyInstanceUID, template.FrameOfReferenceUID = "PSEUDO-1", "2.25.5", "2.25.6"
+    series = resampled_series(fixed, moving, t.GetInverse(), template, registration_id="r1",
+                              modality="MR", description="MR совмещено, подтверждено врачом")
+    assert len(series) == fixed.GetSize()[2]
+    assert {s.StudyInstanceUID for s in series} == {"2.25.5"} and series[0].FrameOfReferenceUID == "2.25.6"
+    assert list(series[0].ImageType) == ["DERIVED", "SECONDARY", "REGISTERED"]
+    again = resampled_series(fixed, moving, t.GetInverse(), template, registration_id="r1",
+                             modality="MR", description="x")
+    assert again[3].SOPInstanceUID == series[3].SOPInstanceUID    # повторная публикация заменяет серию
+
+    for i, ds in enumerate(series):
+        (tmp_path / f"{i:03d}.dcm").write_bytes(dataset_bytes(ds))
+    reader = sitk.ImageSeriesReader()
+    reader.SetFileNames(reader.GetGDCMSeriesFileNames(str(tmp_path)))
+    back = reader.Execute()
+    assert back.GetSize() == fixed.GetSize()
+    assert np.allclose(back.GetSpacing(), fixed.GetSpacing(), atol=1e-3)
+    assert np.allclose(back.GetOrigin(), fixed.GetOrigin(), atol=1e-3)
+    a, b = sitk.GetArrayFromImage(fixed), sitk.GetArrayFromImage(back).astype(np.float32)
+    inner = a[6:-6, 8:-8, 8:-8].ravel(), b[6:-6, 8:-8, 8:-8].ravel()   # край поля обзора — вне moving
+    assert np.corrcoef(*inner)[0, 1] > 0.95
+
+
+def test_publish_only_after_approval(db, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.api import routes_registration
+    from app.core.config import get_settings
+    from app.db.session import get_db
+    from app.main import app
+
+    monkeypatch.setattr(get_settings(), "allow_debug_auth", True)
+    queued = []
+    monkeypatch.setattr(routes_registration, "enqueue_publish", queued.append)
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        c = TestClient(app, raise_server_exceptions=False)
+        h = {"X-Debug-Subject": "dr", "X-Debug-Roles": "radiologist"}
+        fixed, moving = _two_series(db)
+        reg = run_registration(db, fixed_series=fixed, moving_series=moving, engine=_FakeEngine())
+        db.commit()
+        assert c.post(f"/registration/{reg.id}/publish", headers=h).status_code == 409   # не подтверждено
+        registration.review_registration(db, registration_id=reg.id, approved=True, physician="dr")
+        db.commit()
+        researcher = {**h, "X-Debug-Roles": "researcher"}
+        assert c.post(f"/registration/{reg.id}/publish", headers=researcher).status_code == 403
+        r = c.post(f"/registration/{reg.id}/publish", headers=h)
+        assert r.status_code == 200 and r.json()["quality"]["published"] == {"status": "queued"}
+        assert queued == [reg.id]
+    finally:
+        app.dependency_overrides.clear()

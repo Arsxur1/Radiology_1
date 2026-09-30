@@ -101,6 +101,37 @@ function Preview({ r }: { r: RegistrationOut }) {
   );
 }
 
+function PublishBlock({ r, studyUid, onPublish }: { r: RegistrationOut; studyUid?: string; onPublish: () => void }) {
+  const pub = r.quality.published as { status: string; instances?: number; error?: string } | undefined;
+  const viewer = studyUid
+    ? `${window.location.protocol}//${window.location.hostname}:3000/viewer?StudyInstanceUIDs=${studyUid}`
+    : null;
+  return (
+    <div style={{ marginTop: 10 }}>
+      {(!pub || pub.status === "failed") && (
+        <button className="primary" onClick={onPublish}>
+          Показать совмещённую серию в просмотрщике
+        </button>
+      )}
+      {pub?.status === "queued" && <span className="muted">Готовится совмещённая серия…</span>}
+      {pub?.status === "failed" && <div className="error">Не удалось: {pub.error}</div>}
+      {pub?.status === "done" && (
+        <div className="row">
+          <span className="muted">
+            Совмещённая серия ({pub.instances} срезов) добавлена в опорное исследование — та же система координат,
+            синхронная прокрутка и наложение в OHIF.
+          </span>
+          {viewer && (
+            <a href={viewer} target="_blank" rel="noreferrer">
+              Открыть в просмотрщике ↗
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ModalityRegistration() {
   const { patientId } = useParams<{ patientId: string }>();
   const [studies, setStudies] = useState<StudyOut[]>([]);
@@ -169,9 +200,10 @@ export function ModalityRegistration() {
   const canReview = hasRole("radiologist");
   const status = (result?.quality.status as string | undefined) ?? "done";
 
-  // Настоящее совмещение считается в воркере (десятки секунд) — опрашиваем до готовности.
+  const publishing = (result?.quality.published as { status?: string } | undefined)?.status === "queued";
+  // Настоящее совмещение и публикация считаются в воркере — опрашиваем до готовности.
   useEffect(() => {
-    if (!result || (status !== "queued" && status !== "running")) return;
+    if (!result || (status !== "queued" && status !== "running" && !publishing)) return;
     const t = window.setInterval(() => {
       api
         .getRegistration(result.id)
@@ -179,7 +211,7 @@ export function ModalityRegistration() {
         .catch(() => undefined);
     }, 3000);
     return () => window.clearInterval(t);
-  }, [result, status]);
+  }, [result, status, publishing]);
 
   return (
     <div className="layout">
@@ -293,6 +325,20 @@ export function ModalityRegistration() {
                 Отклонить
               </button>
             </div>
+          )}
+          {result.review_status === "approved" && canReview && (
+            <PublishBlock
+              r={result}
+              studyUid={studies.find((st) => st.series.some((se) => se.id === result.fixed_series_id))?.study_instance_uid}
+              onPublish={async () => {
+                setErr(null);
+                try {
+                  setResult(await api.publishRegistration(result.id));
+                } catch (e) {
+                  setErr(e instanceof ApiError ? e.message : String(e));
+                }
+              }}
+            />
           )}
           {result.review_status === "pending" && !canReview && (
             <div className="muted" style={{ marginTop: 10 }}>
