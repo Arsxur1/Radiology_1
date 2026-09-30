@@ -248,3 +248,15 @@ export interface VocabularyConcept {
   radlex: string | null;
   note: string | null;
 }
+
+export interface AuditEntry {
+  id: string;
+  seq: number | null;
+  created_at: string;
+  actor: string;
+  actor_role: string | null;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  details: Record<string, unknown>;
+}

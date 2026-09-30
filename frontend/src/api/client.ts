@@ -3,6 +3,7 @@
 import { authHeaders } from "../auth";
 import { ensureFresh, hasOidcSession, login } from "../oidc";
 import type {
+  AuditEntry,
   CalibrationProposal,
   DriftSlice,
   FindingOut,
@@ -77,6 +78,10 @@ export class ApiError extends Error {
 }
 
 export const api = {
+  auditList: (params: URLSearchParams) => request<AuditEntry[]>(`/audit?${params}`),
+  auditVerify: () => request<{ intact: boolean }>("/audit/verify"),
+  auditCsvUrl: (params: URLSearchParams) => requestBlobUrl(`/audit/export.csv?${params}`),
+
   chestVocabulary: (modality: string) =>
     request<VocabularyConcept[]>(`/vocabulary/chest-findings?modality=${encodeURIComponent(modality)}`),
   createFinding: (payload: { series_id: string; code: string; time_spent_seconds: number }) =>

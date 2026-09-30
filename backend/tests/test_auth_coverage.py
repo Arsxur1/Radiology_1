@@ -112,3 +112,25 @@ def test_audit_chain_order_by_sequence(db):
     db.commit()
     seqs = [r.seq for r in db.query(AuditLog).order_by(AuditLog.seq)]
     assert seqs == list(range(1, 21)) and audit.verify_chain(db)
+
+
+def test_audit_api_filters_paging_export(client, db):
+    from app.models.audit import AuditAction
+    from app.services import audit
+
+    for i in range(5):
+        audit.record(db, actor=f"dr.{i % 2}", action=AuditAction.PATIENT_ACCESS, entity_type="study")
+    audit.record(db, actor="admin", action=AuditAction.MODE_CHANGE, entity_type="mode")
+    db.commit()
+    h = _as("auditor")
+    assert client.get("/audit", headers=_as("radiologist")).status_code == 403
+    rows = client.get("/audit?actor=dr.1", headers=h).json()
+    assert len(rows) == 2 and all(r["actor"] == "dr.1" for r in rows)
+    page1 = client.get("/audit?limit=3", headers=h).json()
+    page2 = client.get(f"/audit?limit=3&before_seq={page1[-1]['seq']}", headers=h).json()
+    assert [r["seq"] for r in page1 + page2] == [6, 5, 4, 3, 2, 1]
+    assert len(client.get("/audit?action=mode_change", headers=h).json()) == 1
+    csv_resp = client.get("/audit/export.csv?entity_type=study", headers=h)
+    assert csv_resp.status_code == 200 and csv_resp.text.count("\n") == 6       # заголовок + 5
+    last = client.get("/audit?limit=1", headers=h).json()[0]
+    assert last["action"] == "export" and last["entity_type"] == "audit_log"     # выгрузка журналирована
