@@ -64,10 +64,22 @@ def test_unapproved_registration_blocks_measurements(db):
         ensure_usable_for_measurements(reg)
 
 
+class _FakeEngine(StubRegistrationEngine):
+    """Как заглушка, но выдаёт себя за настоящий движок (заглушку подтвердить нельзя)."""
+
+    def __init__(self, **quality):
+        self.extra = quality
+
+    def register(self, fixed_prefix, moving_prefix, up_to_stage):
+        out = super().register(fixed_prefix, moving_prefix, up_to_stage)
+        out.quality = {**out.quality, "engine": "simpleitk", **self.extra}
+        return out
+
+
 def test_approved_registration_usable(db):
     fixed, moving = _two_series(db)
     reg = run_registration(
-        db, fixed_series=fixed, moving_series=moving, engine=StubRegistrationEngine()
+        db, fixed_series=fixed, moving_series=moving, engine=_FakeEngine()
     )
     registration.review_registration(
         db, registration_id=reg.id, approved=True, physician="dr"
@@ -102,3 +114,116 @@ def test_deterministic_metric(db):
     # Более поздняя стадия даёт не меньшую метрику.
     rigid = engine.register("ct/x", "mr/x", RegistrationStage.RIGID)
     assert a.metric_value >= rigid.metric_value
+
+
+def test_stub_result_cannot_be_approved(db):
+    fixed, moving = _two_series(db)
+    reg = run_registration(db, fixed_series=fixed, moving_series=moving, engine=StubRegistrationEngine())
+    with pytest.raises(registration.RegistrationBlocked, match="заглушка"):
+        registration.review_registration(db, registration_id=reg.id, approved=True, physician="dr")
+    # Отклонить можно всегда.
+    registration.review_registration(db, registration_id=reg.id, approved=False, physician="dr")
+
+
+def test_folding_blocks_approval(db):
+    fixed, moving = _two_series(db)
+    warn = [{"code": "folding", "blocking": True, "text": "Деформация со «складками»"}]
+    reg = run_registration(db, fixed_series=fixed, moving_series=moving, engine=_FakeEngine(warnings=warn))
+    with pytest.raises(registration.RegistrationBlocked, match="складк"):
+        registration.review_registration(db, registration_id=reg.id, approved=True, physician="dr")
+
+
+def test_queued_registration_cannot_be_approved(db):
+    fixed, moving = _two_series(db)
+    reg = registration.queue_registration(db, fixed_series=fixed, moving_series=moving)
+    assert reg.metric_value is None and reg.quality == {"status": "queued"}
+    with pytest.raises(registration.RegistrationBlocked, match="очереди"):
+        registration.review_registration(db, registration_id=reg.id, approved=True, physician="dr")
+    out = _FakeEngine().register("ct/x", "mr/x", RegistrationStage.AFFINE)
+    registration.apply_output(db, reg, out, requested=RegistrationStage.DEFORMABLE)
+    assert reg.quality["status"] == "done" and reg.quality["requested_stage"] == "deformable"
+    assert reg.stage == RegistrationStage.AFFINE   # достигнутая стадия, а не запрошенная
+    registration.review_registration(db, registration_id=reg.id, approved=True, physician="dr")
+    assert reg.usable_for_measurements()
+
+
+def test_api_queues_real_engine(db, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from app.api import routes_registration
+    from app.core.config import get_settings
+    from app.db.session import get_db
+    from app.main import app
+
+    monkeypatch.setattr(get_settings(), "allow_debug_auth", True)
+    queued = []
+    monkeypatch.setattr(routes_registration, "enqueue_registration", lambda rid, actor: queued.append(rid))
+    app.dependency_overrides[get_db] = lambda: db
+    try:
+        c = TestClient(app, raise_server_exceptions=False)
+        h = {"X-Debug-Subject": "dr", "X-Debug-Roles": "radiologist"}
+        fixed, moving = _two_series(db)
+        db.commit()
+        r = c.post("/registration", json={"fixed_series_id": str(fixed.id), "moving_series_id": str(moving.id)},
+                   headers=h)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["quality"] == {"status": "queued"} and body["review_blockers"] == ["Совмещение ещё в очереди"]
+        assert [str(q) for q in queued] == [body["id"]]
+        assert c.post(f"/registration/{body['id']}/review", json={"approved": True}, headers=h).status_code == 409
+        assert c.get(f"/registration/{body['id']}/preview", headers=h).status_code == 404
+    finally:
+        app.dependency_overrides.clear()
+
+
+# --- Настоящий движок на синтетическом фантоме (SimpleITK) ---
+
+def _phantom():
+    np = pytest.importorskip("numpy")
+    sitk = pytest.importorskip("SimpleITK")
+    z, y, x = np.mgrid[:48, :64, :64].astype(np.float32)
+    a = np.zeros((48, 64, 64), np.float32)
+    a[((x - 32) / 26) ** 2 + ((y - 32) / 19) ** 2 < 1] = 100
+    a[((x - 22) ** 2 + (y - 32) ** 2 + (z - 24) ** 2) < 8 ** 2] = 300
+    a[(abs(x - 42) < 5) & (abs(y - 28) < 6) & (abs(z - 24) < 12)] = 200
+    fixed = sitk.GetImageFromArray(a)
+    fixed.SetSpacing((1.5, 1.5, 2.5))
+    t = sitk.Euler3DTransform((0, 0, 0), 0.0, 0.0, float(np.deg2rad(8)), (5.0, -4.0, 3.0))
+    t.SetCenter(fixed.TransformContinuousIndexToPhysicalPoint([32, 32, 24]))
+    moved = sitk.Resample(fixed, fixed, t, sitk.sitkLinear, 0)
+    # Другая «модальность»: инверсия контраста внутри тела.
+    moving = sitk.Cast(400 - moved, sitk.sitkFloat32) * sitk.Cast(moved > 0, sitk.sitkFloat32)
+    return sitk, fixed, moving
+
+
+def test_itk_engine_recovers_rigid_motion_across_contrast():
+    from app.services.registration_engines import ItkRegistrationEngine
+
+    sitk, fixed, moving = _phantom()
+    stored = {}
+    engine = ItkRegistrationEngine(load=lambda p: fixed if p == "f" else moving,
+                                   store=lambda k, d, t: stored.setdefault(k, (d, t)) and f"masks/{k}")
+    out = engine.register("f", "m", RegistrationStage.AFFINE)
+    q = out.quality
+    assert q["stages"]["rigid"]["mi"] > q["mi_initial"]
+    assert out.stage == RegistrationStage.AFFINE
+    assert q["stages"]["affine"]["dice"] > 0.93 > q["dice_initial"]
+    assert q["warnings"] == []
+    assert out.transform_ref.endswith(".tfm") and q["preview_ref"].endswith(".png")
+    png = next(d for k, (d, t) in stored.items() if t == "image/png")
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    again = engine.register("f", "m", RegistrationStage.AFFINE)
+    assert again.metric_value == out.metric_value   # детерминированность (FR-6)
+
+
+def test_quality_warnings_rules():
+    from app.services.registration_engines import quality_warnings
+
+    q = {"mi_initial": 0.5, "dice_initial": 0.9,
+         "stages": {"rigid": {"mi": 0.6, "dice": 0.92},
+                    "affine": {"mi": 0.4, "dice": 0.5, "accepted": False},
+                    "deformable": {"mi": 0.3, "dice": 0.6, "accepted": True, "jacobian_min": -0.2}}}
+    codes = {w["code"]: w["blocking"] for w in quality_warnings(q)}
+    assert codes["affine_reverted"] is False
+    assert codes["folding"] is True
+    assert "mi_decreased" in codes and "low_overlap" in codes

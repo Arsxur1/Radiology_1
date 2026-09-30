@@ -209,6 +209,8 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  getRegistration: (id: string) => request<RegistrationOut>(`/registration/${id}`),
+  registrationPreviewUrl: (id: string) => requestBlobUrl(`/registration/${id}/preview`),
   reviewRegistration: (id: string, approved: boolean) =>
     request<RegistrationOut>(`/registration/${id}/review`, {
       method: "POST",

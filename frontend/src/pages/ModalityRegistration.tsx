@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api/client";
-import type { RegistrationOut, RegistrationStage, StudyOut } from "../api/types";
+import type { RegistrationOut, RegistrationStage, RegistrationStageQuality, StudyOut } from "../api/types";
 import { hasRole } from "../auth";
 
 interface SeriesOption {
@@ -24,13 +24,90 @@ function ReviewBadge({ r }: { r: RegistrationOut }) {
   return <span className="badge badge-model">качество не подтверждено</span>;
 }
 
+const STAGE_RU: Record<string, string> = { rigid: "жёсткая", affine: "аффинная", deformable: "деформируемая" };
+
+function QualityTable({ q }: { q: Record<string, unknown> }) {
+  const stages = (q.stages ?? {}) as Record<string, RegistrationStageQuality>;
+  const warnings = (q.warnings ?? []) as { code: string; text: string; blocking: boolean }[];
+  if (!q.mi_initial && Object.keys(stages).length === 0) return null;
+  return (
+    <div style={{ margin: "8px 0" }}>
+      <table>
+        <thead>
+          <tr>
+            <th>Стадия</th>
+            <th title="Взаимная информация, больше — лучше">MI</th>
+            <th title="Перекрытие контуров тела">Dice</th>
+            <th>Примечание</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>до совмещения</td>
+            <td>{String(q.mi_initial ?? "—")}</td>
+            <td>{String(q.dice_initial ?? "—")}</td>
+            <td />
+          </tr>
+          {STAGES.filter((s) => stages[s]).map((s) => (
+            <tr key={s} style={stages[s].accepted === false ? { opacity: 0.55 } : undefined}>
+              <td>{STAGE_RU[s]}</td>
+              <td>{stages[s].mi}</td>
+              <td>{stages[s].dice}</td>
+              <td className="muted">
+                {stages[s].accepted === false && "не применена (ухудшила) "}
+                {stages[s].jacobian_min !== undefined &&
+                  `якобиан ${stages[s].jacobian_min}…${stages[s].jacobian_max}`}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {typeof q.runtime_s === "number" && (
+        <div className="muted" style={{ fontSize: 12 }}>
+          {String(q.engine ?? "")} {String(q.engine_version ?? "")}, {q.runtime_s} с
+        </div>
+      )}
+      {warnings.map((w) => (
+        <div key={w.code} className={w.blocking ? "error" : "muted"}>
+          ⚠ {w.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Preview({ r }: { r: RegistrationOut }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!r.has_preview) return;
+    let u: string | null = null;
+    api
+      .registrationPreviewUrl(r.id)
+      .then((x) => setUrl((u = x)))
+      .catch(() => setUrl(null));
+    return () => {
+      if (u) URL.revokeObjectURL(u);
+    };
+  }, [r.id, r.has_preview]);
+  if (!url) return null;
+  return (
+    <div style={{ margin: "8px 0" }}>
+      <img src={url} alt="шахматка совмещения" style={{ maxWidth: "100%", imageRendering: "auto" }} />
+      <div className="muted" style={{ fontSize: 12 }}>
+        Шахматка: клетки опорной и совмещённой серий чередуются (аксиальный, корональный, сагиттальный срезы).
+        Контуры органов должны продолжаться через границы клеток без сдвига.
+      </div>
+    </div>
+  );
+}
+
 export function ModalityRegistration() {
   const { patientId } = useParams<{ patientId: string }>();
   const [studies, setStudies] = useState<StudyOut[]>([]);
   const [fixed, setFixed] = useState("");
   const [moving, setMoving] = useState("");
   const [stage, setStage] = useState<RegistrationStage>("deformable");
-  const [useStub, setUseStub] = useState(true);
+  const [useStub, setUseStub] = useState(false);
   const [result, setResult] = useState<RegistrationOut | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -90,6 +167,19 @@ export function ModalityRegistration() {
   }
 
   const canReview = hasRole("radiologist");
+  const status = (result?.quality.status as string | undefined) ?? "done";
+
+  // Настоящее совмещение считается в воркере (десятки секунд) — опрашиваем до готовности.
+  useEffect(() => {
+    if (!result || (status !== "queued" && status !== "running")) return;
+    const t = window.setInterval(() => {
+      api
+        .getRegistration(result.id)
+        .then(setResult)
+        .catch(() => undefined);
+    }, 3000);
+    return () => window.clearInterval(t);
+  }, [result, status]);
 
   return (
     <div className="layout">
@@ -142,7 +232,7 @@ export function ModalityRegistration() {
               </label>
               <label>
                 <input type="checkbox" checked={useStub} onChange={(e) => setUseStub(e.target.checked)} />{" "}
-                заглушка (без GPU-стенда)
+                демо-заглушка (результат нельзя подтвердить)
               </label>
             </div>
             <div style={{ marginTop: 10 }}>
@@ -161,10 +251,23 @@ export function ModalityRegistration() {
             <strong>Результат совмещения</strong>
             <ReviewBadge r={result} />
           </div>
-          <div className="meas" style={{ margin: "8px 0" }}>
-            стадия: {result.stage} · {result.metric_name}: {result.metric_value ?? "—"}
-          </div>
-          <div className="muted">качество: {JSON.stringify(result.quality)}</div>
+          {status === "queued" || status === "running" ? (
+            <div className="muted" style={{ margin: "8px 0" }}>
+              {status === "queued" ? "В очереди…" : "Считается (жёсткая → аффинная → деформируемая)…"}
+            </div>
+          ) : (
+            <>
+              <div className="meas" style={{ margin: "8px 0" }}>
+                достигнутая стадия: {STAGE_RU[result.stage] ?? result.stage}
+                {result.quality.requested_stage && result.quality.requested_stage !== result.stage
+                  ? ` (запрошена: ${STAGE_RU[result.quality.requested_stage as string]})`
+                  : ""}{" "}
+                · {result.metric_name}: {result.metric_value ?? "—"}
+              </div>
+              <QualityTable q={result.quality} />
+              <Preview r={result} />
+            </>
+          )}
 
           {!result.usable_for_measurements && (
             <div className="error" style={{ marginTop: 8 }}>
@@ -172,9 +275,18 @@ export function ModalityRegistration() {
             </div>
           )}
 
+          {result.review_status === "pending" && canReview && result.review_blockers.length > 0 && (
+            <div className="muted" style={{ marginTop: 8 }}>
+              Подтвердить нельзя: {result.review_blockers.join("; ")}
+            </div>
+          )}
           {result.review_status === "pending" && canReview && (
             <div className="row" style={{ marginTop: 10 }}>
-              <button className="primary" onClick={() => review(true)}>
+              <button
+                className="primary"
+                disabled={result.review_blockers.length > 0}
+                onClick={() => review(true)}
+              >
                 Подтвердить качество
               </button>
               <button className="danger" onClick={() => review(false)}>

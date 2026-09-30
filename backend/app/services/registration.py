@@ -1,13 +1,12 @@
-"""Совмещение модальностей (ТЗ, FR-4). Задел под этап 6, режим ASSIST.
+"""Совмещение модальностей (ТЗ, FR-4).
 
 Последовательность обязательна: жёсткая → аффинная → деформируемая. Метрика для
 разных модальностей — mutual information. Обязателен количественный вывод качества
 и визуальная проверка врачом. Совмещение с неподтверждённым качеством НЕ идёт в
 измерения.
 
-Тяжёлая регистрация (SimpleITK/Elastix или ANTs) подключается на стенде; здесь —
-контур, оценка качества и гейты. Адаптер абстрагирован, детерминированная заглушка
-позволяет собрать контур и тесты без нативных библиотек.
+Движок — SimpleITK (`services/registration_engines.py`), считается в воркере.
+Детерминированная заглушка — только для демо: её результат подтвердить нельзя.
 """
 
 from __future__ import annotations
@@ -29,6 +28,10 @@ STAGE_ORDER = [RegistrationStage.RIGID, RegistrationStage.AFFINE, RegistrationSt
 
 class RegistrationError(Exception):
     """Нарушение процедуры совмещения."""
+
+
+class RegistrationBlocked(RegistrationError):
+    """Подтвердить совмещение нельзя (не посчитано, заглушка, «складки» деформации)."""
 
 
 @dataclass
@@ -71,6 +74,50 @@ class StubRegistrationEngine(RegistrationEngine):
         )
 
 
+def _check_pair(fixed_series: Series, moving_series: Series) -> None:
+    if fixed_series.study.patient_id != moving_series.study.patient_id:
+        raise RegistrationError("Серии принадлежат разным пациентам")
+    if fixed_series.id == moving_series.id:
+        raise RegistrationError("Нельзя совмещать серию с самой собой")
+
+
+def queue_registration(
+    db: Session,
+    *,
+    fixed_series: Series,
+    moving_series: Series,
+    up_to_stage: RegistrationStage = RegistrationStage.DEFORMABLE,
+    actor: str = "system",
+) -> Registration:
+    """Создать совмещение в статусе «в очереди»; считает воркер (`workers/registration_tasks.py`)."""
+    _check_pair(fixed_series, moving_series)
+    reg = Registration(
+        fixed_series_id=fixed_series.id, moving_series_id=moving_series.id, stage=up_to_stage,
+        metric_name="mutual_information", metric_value=None, quality={"status": "queued"},
+        review_status=RegistrationReview.PENDING,
+    )
+    db.add(reg)
+    db.flush()
+    audit.record(db, actor=actor, action=AuditAction.CORRECTION, entity_type="registration", entity_id=reg.id,
+                 details={"event": "registration_queued", "requested_stage": up_to_stage.value})
+    return reg
+
+
+def apply_output(db: Session, reg: Registration, output: RegistrationOutput, *, requested: RegistrationStage,
+                 actor: str = "system") -> Registration:
+    """Записать результат движка. Достигнутая стадия может быть ниже запрошенной, если
+    следующая стадия ухудшила совмещение (движок её отбрасывает и сообщает об этом)."""
+    reg.stage = output.stage
+    reg.metric_value = output.metric_value
+    reg.quality = {**output.quality, "status": "done", "requested_stage": requested.value}
+    reg.transform_ref = output.transform_ref
+    db.flush()
+    audit.record(db, actor=actor, action=AuditAction.CORRECTION, entity_type="registration", entity_id=reg.id,
+                 details={"event": "registration_run", "stage": output.stage.value,
+                          "metric_value": output.metric_value})
+    return reg
+
+
 def run_registration(
     db: Session,
     *,
@@ -80,48 +127,32 @@ def run_registration(
     up_to_stage: RegistrationStage = RegistrationStage.DEFORMABLE,
     actor: str = "system",
 ) -> Registration:
-    """Выполнить совмещение до указанной стадии и сохранить результат (review=pending).
+    """Выполнить совмещение синхронно до указанной стадии (review=pending).
 
     Требует, чтобы обе серии принадлежали одному пациенту. Результат создаётся
     неподтверждённым: для измерений не годен, пока врач не подтвердит качество.
     """
-    if fixed_series.study.patient_id != moving_series.study.patient_id:
-        raise RegistrationError("Серии принадлежат разным пациентам")
-    if fixed_series.id == moving_series.id:
-        raise RegistrationError("Нельзя совмещать серию с самой собой")
-
+    reg = queue_registration(db, fixed_series=fixed_series, moving_series=moving_series,
+                             up_to_stage=up_to_stage, actor=actor)
     output = engine.register(
         fixed_series.object_prefix or fixed_series.series_instance_uid,
         moving_series.object_prefix or moving_series.series_instance_uid,
         up_to_stage,
     )
+    return apply_output(db, reg, output, requested=up_to_stage, actor=actor)
 
-    reg = Registration(
-        fixed_series_id=fixed_series.id,
-        moving_series_id=moving_series.id,
-        stage=output.stage,
-        metric_name="mutual_information",
-        metric_value=output.metric_value,
-        quality=output.quality,
-        transform_ref=output.transform_ref,
-        review_status=RegistrationReview.PENDING,
-    )
-    db.add(reg)
-    db.flush()
 
-    audit.record(
-        db,
-        actor=actor,
-        action=AuditAction.CORRECTION,
-        entity_type="registration",
-        entity_id=reg.id,
-        details={
-            "event": "registration_run",
-            "stage": output.stage.value,
-            "metric_value": output.metric_value,
-        },
-    )
-    return reg
+def review_blockers(reg: Registration) -> list[str]:
+    """Почему врач не может подтвердить совмещение (пусто — может)."""
+    q = reg.quality or {}
+    status = q.get("status", "done")
+    if status != "done":
+        return [{"queued": "Совмещение ещё в очереди", "running": "Совмещение ещё считается",
+                 "failed": f"Совмещение не удалось: {q.get('error', '')}"}.get(status, status)]
+    out = [w["text"] for w in q.get("warnings", []) if w.get("blocking")]
+    if q.get("engine") == "stub":
+        out.append("Демо-заглушка: результат не настоящий и не может быть подтверждён")
+    return out
 
 
 def review_registration(
@@ -131,6 +162,9 @@ def review_registration(
     reg = db.get(Registration, registration_id)
     if reg is None:
         raise RegistrationError("Совмещение не найдено")
+    blockers = review_blockers(reg) if approved else []
+    if blockers:
+        raise RegistrationBlocked("; ".join(blockers))
 
     reg.review_status = RegistrationReview.APPROVED if approved else RegistrationReview.REJECTED
     reg.reviewed_by = physician

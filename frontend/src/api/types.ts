@@ -208,6 +208,16 @@ export interface RegistrationOut {
   quality: Record<string, unknown>;
   review_status: RegistrationReview;
   usable_for_measurements: boolean;
+  review_blockers: string[];
+  has_preview: boolean;
+}
+
+export interface RegistrationStageQuality {
+  mi: number;
+  dice: number;
+  accepted?: boolean;
+  jacobian_min?: number;
+  jacobian_max?: number;
 }
 
 export interface PilotDashboard {
