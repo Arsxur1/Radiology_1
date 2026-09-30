@@ -59,17 +59,23 @@ TS_GROUPS: dict[str, tuple[str, ...]] = {
 }
 
 
+def structure_label_ids(class_names: dict[int, str], keys: list[str]) -> dict[str, list[int]]:
+    """Какие метки маски составляют каждую структуру каталога (нужно и для 3D-модели, FR-5)."""
+    by_name = {name: idx for idx, name in class_names.items()}
+    out = {}
+    for key in keys:
+        ids = [int(by_name[m]) for m in TS_GROUPS.get(key, (key,)) if m in by_name]
+        if ids:
+            out[key] = ids
+    return out
+
+
 def labelmap_structures(labelmap, class_names: dict[int, str], keys: list[str]) -> list[StructureResult]:
     """Мультиметочная маска → воксельная статистика по структурам каталога (numpy)."""
     import numpy as np
 
-    by_name = {name: idx for idx, name in class_names.items()}
     out: list[StructureResult] = []
-    for key in keys:
-        members = TS_GROUPS.get(key, (key,))
-        ids = [by_name[m] for m in members if m in by_name]
-        if not ids:
-            continue
+    for key, ids in structure_label_ids(class_names, keys).items():
         mask = np.isin(labelmap, ids)
         count = int(mask.sum())
         if count == 0:
@@ -215,7 +221,8 @@ class TotalSegmentatorAdapter(SegmentationModel):  # pragma: no cover - нуже
             mask_artifact_ref=ref,
             structures=structures,
             preprocessing_params={"adapter": "totalsegmentator", "task": self._task, "fast": self._fast,
-                                  "mask_spacing_mm": list(zooms)},
+                                  "mask_spacing_mm": list(zooms),
+                                  "label_ids": structure_label_ids(class_map[self._task], self._keys)},
             spacing_mm=zooms,
         )
 

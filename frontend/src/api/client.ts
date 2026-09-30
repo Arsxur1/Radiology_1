@@ -95,6 +95,8 @@ export const api = {
 
   seriesPreviewUrl: (seriesId: string) => requestBlobUrl(`/studies/series/${seriesId}/preview`),
   findingHeatmapUrl: (findingId: string) => requestBlobUrl(`/findings/${findingId}/heatmap`),
+  requestMesh: (findingId: string) => request<FindingOut>(`/findings/${findingId}/mesh`, { method: "POST" }),
+  meshUrl: (findingId: string, fmt: "stl" | "glb") => requestBlobUrl(`/findings/${findingId}/mesh.${fmt}`),
 
   listStudies: (modality?: string, patientId?: string) => {
     const q = new URLSearchParams();

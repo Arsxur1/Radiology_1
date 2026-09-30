@@ -103,6 +103,79 @@ function HeatmapView({ finding }: { finding: FindingOut }) {
   );
 }
 
+// 3D-модель структуры (FR-5): только по подтверждённой и не исправленной маске модели.
+// Гейт (толщина среза, сжатие, подтверждение) проверяет сервер и сообщает причину отказа.
+function MeshPanel({ finding, onChange }: { finding: FindingOut; onChange: (f: FindingOut) => void }) {
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const mesh = finding.mesh;
+
+  useEffect(() => {
+    if (mesh?.status !== "queued") return;
+    const t = window.setInterval(async () => {
+      try {
+        const fresh = (await api.listSeriesFindings(finding.series_id)).find((f) => f.id === finding.id);
+        if (fresh && fresh.mesh?.status !== "queued") onChange(fresh);
+      } catch {
+        /* повторим на следующем тике */
+      }
+    }, 3000);
+    return () => window.clearInterval(t);
+  }, [mesh?.status, finding.id, finding.series_id, onChange]);
+
+  async function build() {
+    setBusy(true);
+    setErr(null);
+    try {
+      onChange(await api.requestMesh(finding.id));
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function download(fmt: "stl" | "glb") {
+    setErr(null);
+    try {
+      const url = await api.meshUrl(finding.id, fmt);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${finding.label ?? "structure"}.${fmt}`;
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : String(e));
+    }
+  }
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      {(!mesh || mesh.status === "failed") && (
+        <button disabled={busy} onClick={build}>
+          Построить 3D-модель
+        </button>
+      )}
+      {mesh?.status === "queued" && <span className="muted">3D-модель строится…</span>}
+      {mesh?.status === "failed" && <div className="error">Не построена: {mesh.reason}</div>}
+      {mesh?.status === "ready" && (
+        <div className="row">
+          <span className="muted">
+            3D-модель: {mesh.faces?.toLocaleString("ru-RU")} граней, объём {mesh.volume_ml} мл
+          </span>
+          <button onClick={() => download("stl")} title="Для 3D-печати">
+            STL
+          </button>
+          <button onClick={() => download("glb")} title="Для просмотра (glTF)">
+            GLB
+          </button>
+        </div>
+      )}
+      {err && <div className="error">{err}</div>}
+    </div>
+  );
+}
+
 export function FindingCard({ finding, onChange }: { finding: FindingOut; onChange: (f: FindingOut) => void }) {
   // Момент, когда карточка стала видна врачу — для расчёта затраченного времени.
   const shownAt = useRef<number>(Date.now());
@@ -158,6 +231,9 @@ export function FindingCard({ finding, onChange }: { finding: FindingOut; onChan
         <Measurements m={finding.measurements} qualitative={(finding.code ?? "").startsWith("CXR-")} />
       </div>
       {finding.has_heatmap && <HeatmapView finding={finding} />}
+      {finding.source === "model" &&
+        finding.confirmation_status === "confirmed" &&
+        typeof finding.measurements.volume_ml === "number" && <MeshPanel finding={finding} onChange={onChange} />}
       {!decided && (
         <div className="row">
           {/* Активное действие по одной находке (SR-2). */}

@@ -16,9 +16,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentUser, require_roles
 from app.core.roles import Role
 from app.db.session import get_db
+from app.models.audit import AuditAction
 from app.models.imaging import Series
 from app.models.ml import Finding, FindingSource, InferenceResult
-from app.services import corrections
+from app.services import audit, corrections
 from app.services.corrections import CorrectionError
 from app.services.mode_state import model_results_visible
 
@@ -36,6 +37,8 @@ class FindingOut(BaseModel):
     confirmation_status: str
     # Есть ли тепловая карта «куда смотрела модель» (GET /findings/{id}/heatmap).
     has_heatmap: bool = False
+    # Состояние 3D-модели (FR-5): queued / ready / failed и статистика; без ссылок на хранилище.
+    mesh: dict | None = None
 
 
 class ConfirmIn(BaseModel):
@@ -76,7 +79,14 @@ def _out(f: Finding) -> FindingOut:
         source=f.source.value,
         confirmation_status=f.confirmation_status.value,
         has_heatmap=bool((f.coordinates or {}).get("heatmap_ref")),
+        mesh=_mesh_public((f.coordinates or {}).get("mesh")),
     )
+
+
+def _mesh_public(state: dict | None) -> dict | None:
+    if not state:
+        return None
+    return {k: v for k, v in state.items() if k not in ("stl", "glb")}
 
 
 @router.get("/series/{series_id}", response_model=list[FindingOut])
@@ -206,3 +216,74 @@ def create(
         raise HTTPException(status_code=409, detail=str(e)) from e
     db.commit()
     return _out(finding)
+
+
+# --- 3D-модели (FR-5) ---
+
+MESH_FORMATS = {"stl": ("model/stl", "stl"), "glb": ("model/gltf-binary", "glb")}
+
+
+def enqueue_mesh(finding_id: uuid.UUID) -> None:
+    from app.workers.celery_app import celery_app
+
+    celery_app.send_task("mesh.build", args=[str(finding_id)])
+
+
+def _visible_mesh_source(db: Session, finding_id: uuid.UUID):
+    from app.services.mesh_builder import mesh_source
+
+    src = mesh_source(db, finding_id)
+    if not model_results_visible(db, src.series.modality if src.series else None):
+        raise LookupError("Результаты модели в текущем режиме не показываются")
+    return src
+
+
+@router.post("/{finding_id}/mesh", response_model=FindingOut, status_code=202)
+def request_mesh(
+    finding_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.RADIOLOGIST, Role.CLINICIAN, Role.RESEARCHER)),
+) -> FindingOut:
+    """Поставить построение 3D-модели в очередь. Отказ гейта FR-5 — 422 с причиной."""
+    from app.services.mesh_builder import MeshRefused, set_mesh_state
+
+    try:
+        src = _visible_mesh_source(db, finding_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except MeshRefused as e:
+        raise HTTPException(status_code=422, detail=e.reason) from e
+    if ((src.finding.coordinates or {}).get("mesh") or {}).get("status") != "ready":
+        set_mesh_state(src.finding, {"status": "queued"})
+        db.commit()
+        enqueue_mesh(finding_id)
+    return _out(src.finding)
+
+
+@router.get("/{finding_id}/mesh.{fmt}")
+def download_mesh(
+    finding_id: uuid.UUID,
+    fmt: str,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_roles(Role.RADIOLOGIST, Role.CLINICIAN, Role.RESEARCHER)),
+) -> Response:
+    """STL (печать) или GLB (просмотр в браузере). Выгрузка записывается в журнал аудита."""
+    from app.services import storage
+    from app.services.mesh_builder import MeshRefused
+
+    if fmt not in MESH_FORMATS:
+        raise HTTPException(status_code=404, detail="Формат: stl или glb")
+    try:
+        src = _visible_mesh_source(db, finding_id)
+    except (LookupError, MeshRefused) as e:
+        raise HTTPException(status_code=404, detail=getattr(e, "reason", str(e))) from e
+    state = (src.finding.coordinates or {}).get("mesh") or {}
+    if state.get("status") != "ready" or not state.get(fmt):
+        raise HTTPException(status_code=404, detail="3D-модель ещё не построена")
+    audit.record_access(db, user, AuditAction.EXPORT, entity_type="mesh", entity_id=finding_id,
+                        details={"format": fmt, "structure_key": src.structure_key})
+    media, ext = MESH_FORMATS[fmt]
+    return Response(content=storage.get_object_ref(state[fmt]), media_type=media, headers={
+        "Content-Disposition": f'attachment; filename="{src.structure_key}.{ext}"',
+        "Cache-Control": "private, no-store",
+    })

@@ -40,6 +40,18 @@ export interface FindingOut {
   source: FindingSource;
   confirmation_status: ConfirmationStatus;
   has_heatmap: boolean;
+  mesh: MeshState | null;
+}
+
+/** 3D-модель структуры (FR-5): строится в фоне из подтверждённой маски. */
+export interface MeshState {
+  status: "queued" | "ready" | "failed";
+  reason?: string;
+  vertices?: number;
+  faces?: number;
+  surface_mm2?: number;
+  volume_ml?: number;
+  marching_cubes_step?: number;
 }
 
 export interface ModeOut {

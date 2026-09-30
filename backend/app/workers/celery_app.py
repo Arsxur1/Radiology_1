@@ -12,7 +12,8 @@ celery_app = Celery(
     "medviz",
     broker=_settings.celery_broker_url,
     backend=_settings.celery_result_backend,
-    include=["app.workers.tasks", "app.workers.segmentation_tasks", "app.workers.classification_tasks"],
+    include=["app.workers.tasks", "app.workers.segmentation_tasks", "app.workers.classification_tasks",
+             "app.workers.mesh_tasks"],
 )
 
 celery_app.conf.update(
