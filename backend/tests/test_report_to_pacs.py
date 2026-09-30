@@ -120,3 +120,12 @@ def test_sr_file_roundtrip():
     assert back.ContentSequence[0].TextValue == "Oʻng tomonda plevral suyuqlik."
     assert back.SeriesDescription == "Xulosa (medviz)" and back.ContentDate == "20260930"
     assert str(back.VerifyingObserverSequence[0].VerifyingObserverName) == "dr^x"
+
+
+def test_report_loaded_by_study(setup):
+    client, signed, _, _, _ = setup
+    r = client.get(f"/reports/by-study/{signed.study_id}", headers=H)
+    assert r.status_code == 200 and r.json()["finalized_by"] == "dr.aliyeva"   # подписанное важнее черновика
+    assert client.get(f"/reports/by-study/{uuid.uuid4()}", headers=H).status_code == 404
+    assert client.get(f"/reports/by-study/{signed.study_id}",
+                      headers={**H, "X-Debug-Roles": "researcher"}).status_code == 403

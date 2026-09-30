@@ -72,6 +72,24 @@ def generate(
     return _out(report)
 
 
+@router.get("/by-study/{study_id}", response_model=ReportOut)
+def get_study_report(
+    study_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(*REPORT_READERS)),
+) -> ReportOut:
+    """Заключение исследования (черновик или подписанное) — чтобы при повторном открытии
+    врач видел его сразу, а подписанное можно было отправить в PACS позже."""
+    from sqlalchemy import select
+
+    rows = db.execute(select(Report).where(Report.study_id == study_id)).scalars().all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Заключения ещё нет")
+    # По правилам заключение одно; если данных больше — подписанное важнее, затем самое свежее.
+    report = max(rows, key=lambda r: (bool(r.finalized_by), r.updated_at or r.created_at))
+    return _out(report)
+
+
 @router.get("/{report_id}", response_model=ReportOut)
 def get_report(
     report_id: uuid.UUID,

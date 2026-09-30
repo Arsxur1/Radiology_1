@@ -37,6 +37,14 @@ export function StudyReview() {
         s.series.forEach((se) => loadFindings(se.id));
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : String(e)));
+    // Уже существующее заключение (черновик или подписанное) — видно сразу при открытии.
+    api
+      .studyReport(studyId)
+      .then((r) => {
+        setReport(r);
+        if (r.language === "ru" || r.language === "uz") setLanguage(r.language);
+      })
+      .catch(() => setReport(null)); // 404 — заключения ещё нет
   }, [studyId, loadFindings]);
 
   function onFindingChange(seriesId: string, updated: FindingOut) {
@@ -123,7 +131,7 @@ export function StudyReview() {
 
       <section className="card">
         <div className="row spread">
-          <strong>Черновик заключения</strong>
+          <strong>{report?.finalized_by ? "Заключение (подписано)" : "Черновик заключения"}</strong>
           <div className="row">
             <select
               value={language}

@@ -147,6 +147,7 @@ export const api = {
       body: JSON.stringify({ study_id: studyId, language }),
     }),
 
+  studyReport: (studyId: string) => request<ReportOut>(`/reports/by-study/${studyId}`),
   finalizeReport: (reportId: string) =>
     request<ReportOut>(`/reports/${reportId}/finalize`, { method: "POST" }),
   sendReportToPacs: (reportId: string) =>
