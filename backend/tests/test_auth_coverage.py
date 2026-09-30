@@ -75,3 +75,40 @@ def test_issuer_public_and_jwks_internal(monkeypatch):
     s = Settings(_env_file=None)
     assert s.oidc_issuer == "http://10.0.0.50:8080/realms/medviz"
     assert s.oidc_jwks_url == "http://keycloak:8080/realms/medviz/protocol/openid-connect/certs"
+
+
+def test_data_access_is_audited(client, db):
+    from datetime import datetime
+
+    from app.models.audit import AuditAction, AuditLog
+    from app.models.imaging import Study
+    from app.models.patient import Patient
+
+    p = Patient()
+    db.add(p)
+    db.flush()
+    st = Study(patient_id=p.id, study_instance_uid="1.2.3", modality="DX", study_date=datetime(2026, 9, 1))
+    db.add(st)
+    db.commit()
+    client.get(f"/studies/{st.id}", headers=_as("clinician"))
+    client.get(f"/patients/{p.id}", headers=_as("radiologist"))
+    client.get("/patients/search/by-identifier?value=Karimov", headers=_as("radiologist"))
+    client.post("/learning/site-manifest", headers=_as("researcher"))
+    rows = db.query(AuditLog).order_by(AuditLog.created_at).all()
+    got = [(r.actor_role, r.action, r.entity_type) for r in rows]
+    assert ("clinician", AuditAction.PATIENT_ACCESS, "study") in got
+    assert ("radiologist", AuditAction.PATIENT_ACCESS, "patient") in got
+    assert ("researcher", AuditAction.EXPORT, "site_manifest") in got
+    search = next(r for r in rows if r.entity_type == "patient_search")
+    assert "Karimov" not in str(search.details)                 # сам идентификатор в журнал не попадает
+
+
+def test_audit_chain_order_by_sequence(db):
+    from app.models.audit import AuditAction, AuditLog
+    from app.services import audit
+
+    for i in range(20):                       # одна транзакция — одинаковое время начала
+        audit.record(db, actor=f"a{i}", action=AuditAction.PATIENT_ACCESS, entity_type="t")
+    db.commit()
+    seqs = [r.seq for r in db.query(AuditLog).order_by(AuditLog.seq)]
+    assert seqs == list(range(1, 21)) and audit.verify_chain(db)

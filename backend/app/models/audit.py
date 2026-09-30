@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import BigInteger, DateTime, String, func
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,6 +49,9 @@ class AuditLog(UUIDMixin, Base):
     entity_id: Mapped[uuid.UUID | None] = mapped_column(GUID(), nullable=True)
     details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     # Хеш-цепочка: hash(prev_hash + payload). Позволяет обнаружить разрыв.
+    # Порядковый номер в цепочке: однозначный порядок (время начала транзакции в PostgreSQL
+    # у нескольких записей совпадает). Выдаётся под блокировкой записи аудита.
+    seq: Mapped[int | None] = mapped_column(BigInteger, nullable=True, unique=True, index=True)
     prev_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     entry_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
 

@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentUser, require_roles
 from app.core.roles import Role
 from app.db.session import get_db
+from app.models.audit import AuditAction
 from app.models.ml import CorrectionType
-from app.services import dataset_export, drift
+from app.services import audit, dataset_export, drift
 from app.services.dataset_export import ExportFilters
 
 router = APIRouter(prefix="/learning", tags=["learning"])
@@ -32,7 +33,7 @@ class ExportRequest(BaseModel):
 def export_training_set(
     req: ExportRequest,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_roles(Role.RESEARCHER, Role.ADMIN)),
+    user: CurrentUser = Depends(require_roles(Role.RESEARCHER, Role.ADMIN)),
 ) -> dict:
     """Экспорт обучающего набора с фильтрами (FR-9). Данные обезличены (SR-9)."""
     filters = ExportFilters(
@@ -43,13 +44,16 @@ def export_training_set(
         require_3d_capable=req.require_3d_capable,
     )
     items = dataset_export.export(db, filters)
+    audit.record_access(db, user, AuditAction.EXPORT, entity_type="training_export",
+                        details={"what": "экспорт правок для обучения", "count": len(items),
+                                 "filters": req.model_dump(mode="json")})
     return {"count": len(items), "items": [i.__dict__ for i in items]}
 
 
 @router.post("/site-manifest")
 def export_site_manifest(
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_roles(Role.RESEARCHER, Role.ADMIN)),
+    user: CurrentUser = Depends(require_roles(Role.RESEARCHER, Role.ADMIN)),
 ) -> dict:
     """Метки площадки из решений врачей в формате обучающего манифеста.
 
@@ -59,6 +63,8 @@ def export_site_manifest(
     from app.services.site_labels import site_manifest
 
     records, report = site_manifest(db)
+    audit.record_access(db, user, AuditAction.EXPORT, entity_type="site_manifest",
+                        details={"what": "метки площадки для обучения", "records": report["records"]})
     return {"report": report, "records": records}
 
 

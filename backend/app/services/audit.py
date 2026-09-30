@@ -11,7 +11,7 @@ import hashlib
 import json
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.models.audit import AuditAction, AuditLog
@@ -20,6 +20,17 @@ from app.models.audit import AuditAction, AuditLog
 def _compute_hash(prev_hash: str | None, payload: dict) -> str:
     material = (prev_hash or "") + json.dumps(payload, sort_keys=True, default=str)
     return hashlib.sha256(material.encode()).hexdigest()
+
+
+# Ключ advisory lock PostgreSQL для цепочки аудита (произвольная константа).
+_AUDIT_LOCK_KEY = 0x6D65647669  # «medvi»
+
+
+def _lock_chain(db: Session) -> None:
+    """Сериализовать запись в аудит до конца транзакции: иначе два параллельных запроса
+    возьмут один и тот же «последний» хеш и цепочка разветвится (ложная тревога о подделке)."""
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _AUDIT_LOCK_KEY})
 
 
 def record(
@@ -34,8 +45,9 @@ def record(
 ) -> AuditLog:
     """Добавить запись в аудит-лог. Возвращает созданную запись."""
     details = details or {}
+    _lock_chain(db)
     last = db.execute(
-        select(AuditLog).order_by(AuditLog.created_at.desc()).limit(1)
+        select(AuditLog).where(AuditLog.seq.is_not(None)).order_by(AuditLog.seq.desc()).limit(1)
     ).scalar_one_or_none()
     prev_hash = last.entry_hash if last else None
 
@@ -54,6 +66,7 @@ def record(
         entity_type=entity_type,
         entity_id=entity_id,
         details=details,
+        seq=(last.seq + 1) if last else 1,
         prev_hash=prev_hash,
         entry_hash=_compute_hash(prev_hash, payload),
     )
@@ -64,7 +77,7 @@ def record(
 
 def verify_chain(db: Session) -> bool:
     """Проверить целостность хеш-цепочки аудит-лога (для приёмки, раздел 10)."""
-    rows = db.execute(select(AuditLog).order_by(AuditLog.created_at.asc())).scalars().all()
+    rows = db.execute(select(AuditLog).order_by(AuditLog.seq.asc())).scalars().all()
     prev_hash: str | None = None
     for row in rows:
         payload = {
@@ -81,3 +94,17 @@ def verify_chain(db: Session) -> bool:
             return False
         prev_hash = row.entry_hash
     return True
+
+
+def record_access(db: Session, user, action: AuditAction, *, entity_type: str,
+                  entity_id: uuid.UUID | None = None, details: dict | None = None) -> None:
+    """Журналировать ДОСТУП к данным (чтение/выгрузку): кто, что, когда (FR-12).
+
+    Фиксируется сразу (отдельный commit): факт доступа не должен теряться, даже если
+    дальше обработка запроса упадёт.
+    """
+    record(
+        db, actor=user.subject, actor_role=",".join(sorted(r.value for r in user.roles)),
+        action=action, entity_type=entity_type, entity_id=entity_id, details=details or {},
+    )
+    db.commit()

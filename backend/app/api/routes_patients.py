@@ -12,8 +12,9 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentUser, require_roles
 from app.core.roles import Role
 from app.db.session import get_db
+from app.models.audit import AuditAction
 from app.models.patient import Patient, PatientIdentifier
-from app.services import patient_admin
+from app.services import audit, patient_admin
 from app.services.patient_admin import MergeError
 
 router = APIRouter(prefix="/patients", tags=["patients"])
@@ -69,11 +70,13 @@ def _out(db: Session, p: Patient) -> PatientOut:
 def get_patient(
     patient_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_roles(Role.ADMIN, Role.RADIOLOGIST)),
+    user: CurrentUser = Depends(require_roles(Role.ADMIN, Role.RADIOLOGIST)),
 ) -> PatientOut:
     p = db.get(Patient, patient_id)
     if p is None:
         raise HTTPException(status_code=404, detail="Пациент не найден")
+    audit.record_access(db, user, AuditAction.PATIENT_ACCESS, entity_type="patient", entity_id=p.id,
+                        details={"what": "карточка пациента"})
     return _out(db, p)
 
 
@@ -81,8 +84,11 @@ def get_patient(
 def search_by_identifier(
     value: str,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_roles(Role.ADMIN, Role.RADIOLOGIST)),
+    user: CurrentUser = Depends(require_roles(Role.ADMIN, Role.RADIOLOGIST)),
 ) -> list[PatientOut]:
+    # Значение идентификатора в журнал не пишем (может быть ФИО) — только факт поиска.
+    audit.record_access(db, user, AuditAction.PATIENT_ACCESS, entity_type="patient_search",
+                        details={"what": "поиск пациента по идентификатору"})
     """Поиск по нормализованному идентификатору (транслитерация уже применена клиентом
     ingest). Возвращает кандидатов для ручного объединения при неоднозначности."""
     from app.services.patient_matching import normalize_identifier

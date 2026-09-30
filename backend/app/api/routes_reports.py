@@ -12,9 +12,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import CurrentUser, require_roles
 from app.core.roles import Role
 from app.db.session import get_db
+from app.models.audit import AuditAction
 from app.models.imaging import Study
 from app.models.ml import Report
-from app.services import report_export, report_repo
+from app.services import audit, report_export, report_repo
 from app.services.report_draft import UnconfirmedFindingError
 from app.services.report_export import ReportExportInput
 
@@ -104,7 +105,7 @@ def finalize(
 def export_html(
     report_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_roles(*REPORT_READERS)),
+    user: CurrentUser = Depends(require_roles(*REPORT_READERS)),
 ) -> HTMLResponse:
     """Выгрузка заключения в HTML для печати в PDF (FR-8). Только финализированное."""
     report = db.get(Report, report_id)
@@ -114,6 +115,8 @@ def export_html(
         raise HTTPException(
             status_code=409, detail="Выгрузка возможна только после подтверждения врачом"
         )
+    audit.record_access(db, user, AuditAction.EXPORT, entity_type="report", entity_id=report.id,
+                        details={"what": "выгрузка заключения (HTML)", "study_id": str(report.study_id)})
     study = db.get(Study, report.study_id)
     data = ReportExportInput(
         study_uid=study.study_instance_uid if study else str(report.study_id),
@@ -130,7 +133,7 @@ def export_html(
 def sr_content(
     report_id: uuid.UUID,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_roles(*REPORT_READERS)),
+    user: CurrentUser = Depends(require_roles(*REPORT_READERS)),
 ) -> dict:
     """Структура содержания DICOM SR с трассировкой пункт → находка (FR-8).
 
@@ -146,6 +149,8 @@ def sr_content(
         raise HTTPException(
             status_code=409, detail="Выгрузка возможна только после подтверждения врачом"
         )
+    audit.record_access(db, user, AuditAction.EXPORT, entity_type="report", entity_id=report.id,
+                        details={"what": "выгрузка заключения (DICOM SR)", "study_id": str(report.study_id)})
     study = db.get(Study, report.study_id)
     data = ReportExportInput(
         study_uid=study.study_instance_uid if study else str(report.study_id),

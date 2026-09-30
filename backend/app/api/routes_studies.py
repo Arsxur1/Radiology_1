@@ -10,10 +10,12 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentUser, require_roles
+from app.api.deps import CurrentUser, get_current_user, require_roles
 from app.core.roles import Role
 from app.db.session import get_db
+from app.models.audit import AuditAction
 from app.models.imaging import Series, Study
+from app.services import audit
 
 router = APIRouter(prefix="/studies", tags=["studies"])
 
@@ -63,10 +65,16 @@ def list_studies(
 
 
 @router.get("/{study_id}", response_model=StudyOut)
-def get_study(study_id: uuid.UUID, db: Session = Depends(get_db)) -> StudyOut:
+def get_study(
+    study_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(get_current_user),
+) -> StudyOut:
     study = db.get(Study, study_id)
     if study is None:
         raise HTTPException(status_code=404, detail="Исследование не найдено")
+    audit.record_access(db, user, AuditAction.PATIENT_ACCESS, entity_type="study", entity_id=study.id,
+                        details={"what": "открыто исследование", "patient_id": str(study.patient_id)})
     pending, reports = _worklist_status(db, [study.id])
     return _to_study_out(study, pending.get(study.id, 0), reports.get(study.id, "none"))
 
