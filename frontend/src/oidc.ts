@@ -26,15 +26,16 @@ async function config() {
     configPromise = fetch("/api/auth/config")
       .then((r) => r.json() as Promise<AuthConfig>)
       .then((c) => ({
-        // По умолчанию Keycloak на том же хосте, порт 8080 (docker-compose).
-        issuer: c.issuer ?? `${window.location.protocol}//${window.location.hostname}:8080/realms/${c.realm}`,
+        // По умолчанию Keycloak за тем же шлюзом по пути /auth (docker-compose).
+        issuer: c.issuer ?? `${window.location.origin}/auth/realms/${c.realm}`,
         clientId: c.client_id,
       }));
   }
   return configPromise;
 }
 
-const redirectUri = () => `${window.location.origin}/auth/callback`;
+// Не /auth/…: этот путь шлюза принадлежит Keycloak.
+const redirectUri = () => `${window.location.origin}/login/callback`;
 
 function b64url(bytes: Uint8Array): string {
   let s = "";

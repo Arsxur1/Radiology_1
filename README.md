@@ -62,10 +62,14 @@ make seed                 # (опционально) демо-данные дл�
 | Сервис | URL |
 |---|---|
 | Backend API (Swagger) | http://localhost:8000/docs |
-| OHIF Viewer | http://localhost:3000 |
+| Рабочее место врача (шлюз) | https://localhost/ (без сертификата — http://localhost/) |
+| OHIF Viewer (через шлюз) | https://localhost:3000 |
+| Вход и учётные записи (Keycloak за шлюзом) | https://localhost/auth/admin |
 | Orthanc | http://localhost:8042 |
 | S3 (объекты) | http://localhost:9000 (только по ключам из `.env`) |
-| Keycloak | http://localhost:8080 |
+
+HTTPS: `make tls-cert HOST=<адрес сервера>` создаёт центр сертификации клиники и сертификат
+шлюза (`infra/tls/`); без сертификата шлюз работает по HTTP с предупреждением.
 
 ## Разработка
 

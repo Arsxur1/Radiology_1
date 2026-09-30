@@ -127,15 +127,15 @@ services:
       # HTTP внутри сети клиники; HTTPS снаружи — на шлюзе (заголовки X-Forwarded-*).
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
+      # Keycloak доступен только через шлюз по пути /auth (порт 8080 наружу не открыт).
+      KC_HTTP_RELATIVE_PATH: /auth
       KC_HEALTH_ENABLED: "true"
       # Внешний адрес (для браузеров врачей) — он же издатель токенов; backend ходит за
       # ключами по внутреннему адресу (backchannel).
-      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8080}
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost/auth}
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     volumes:
       - ./infra/keycloak/realm-medviz.json:/opt/keycloak/data/import/realm-medviz.json:ro
-    ports:
-      - "8080:8080"
 
   # ─── Backend API ──────────────────────────────────────────────────────────
   backend:
@@ -205,14 +205,22 @@ services:
     environment:
       ORTHANC_USERNAME: ${ORTHANC_USERNAME}
       ORTHANC_PASSWORD: ${ORTHANC_PASSWORD}
+    # Единственная точка входа: интерфейс, API, вход (/auth), DICOMweb, OHIF (:3000).
+    # HTTPS — если в infra/tls/ лежат server.crt и server.key (make tls-cert).
     volumes:
-      - ./infra/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./infra/nginx/locations.conf.template:/etc/nginx/medviz/locations.conf.template:ro
       - ./infra/nginx/15-orthanc-auth.envsh:/docker-entrypoint.d/15-orthanc-auth.envsh:ro
+      - ./infra/nginx/16-medviz-conf.sh:/docker-entrypoint.d/16-medviz-conf.sh:ro
+      - ./infra/tls:/etc/nginx/tls:ro
     ports:
       - "80:80"
+      - "443:443"
+      - "3000:3000"
     depends_on:
       - backend
       - orthanc-clean
+      - keycloak
+      - ohif
 
   # ─── Просмотрщик ──────────────────────────────────────────────────────────
   ohif:
@@ -227,8 +235,7 @@ services:
       - cp /medviz/ohif.js /usr/share/nginx/html/app-config.js && exec /usr/src/entrypoint.sh nginx -g 'daemon off;'
     volumes:
       - ./frontend/config/ohif.js:/medviz/ohif.js:ro
-    ports:
-      - "3000:80"
+    # Наружу — только через шлюз (:3000, с сертификатом — HTTPS).
     depends_on:
       - orthanc-clean
 

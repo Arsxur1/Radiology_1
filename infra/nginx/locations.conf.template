@@ -1,0 +1,65 @@
+# Маршруты шлюза medviz (включаются в сервер :80 или :443 скриптом 16-medviz-conf.sh).
+#   /            — рабочее место врача (React)
+#   /api/        — backend (FastAPI)
+#   /auth/       — вход сотрудников (Keycloak); отдельного порта наружу у Keycloak нет
+#   /dicom-web/  — обезличенный Orthanc (DICOMweb для OHIF); пароль подставляет шлюз
+# Идентифицирующий контур (orthanc-raw, postgres-idmap) через шлюз НЕ доступен.
+client_max_body_size 200m;
+
+root /usr/share/nginx/html;
+
+location / {
+    try_files $uri /index.html;
+}
+
+location /api/ {
+    proxy_pass http://backend:8000/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_read_timeout 120s;
+}
+
+# Проверка входа для снимков: backend проверяет токен Keycloak (FR-12).
+location = /_auth {
+    internal;
+    proxy_pass http://backend:8000/auth/check;
+    proxy_pass_request_body off;
+    proxy_set_header Content-Length "";
+    proxy_set_header Authorization $http_authorization;
+}
+
+# Только чтение обезличенных данных для OHIF (он открыт на :3000 — другой origin).
+# Предзапрос CORS (OPTIONS) без токена — отвечает сам шлюз; всё остальное — после входа.
+location /dicom-web/ {
+    limit_except GET OPTIONS { deny all; }
+    if ($request_method = OPTIONS) {
+        add_header Access-Control-Allow-Origin $http_origin;
+        add_header Access-Control-Allow-Headers "Accept, Authorization, Content-Type";
+        add_header Access-Control-Allow-Methods "GET, OPTIONS";
+        return 204;
+    }
+    auth_request /_auth;
+    add_header Access-Control-Allow-Origin $http_origin always;
+    proxy_set_header Authorization "Basic ${ORTHANC_BASIC_AUTH}";
+    proxy_pass http://orthanc-clean:8042/dicom-web/;
+}
+
+location /wado {
+    limit_except GET { deny all; }
+    auth_request /_auth;
+    add_header Access-Control-Allow-Origin $http_origin always;
+    proxy_set_header Authorization "Basic ${ORTHANC_BASIC_AUTH}";
+    proxy_pass http://orthanc-clean:8042/wado;
+}
+
+# Keycloak за шлюзом: с сертификатом пароли сотрудников идут только по HTTPS.
+location /auth/ {
+    proxy_pass http://keycloak:8080/auth/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Port $server_port;
+    proxy_buffer_size 64k;
+    proxy_buffers 8 64k;
+}

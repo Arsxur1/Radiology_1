@@ -15,7 +15,8 @@ window.config = {
   // в DICOMweb, а шлюз проверяет его на backend.
   oidc: [
     {
-      authority: window.location.protocol + '//' + window.location.hostname + ':8080/realms/medviz',
+      // Keycloak — за шлюзом по пути /auth (тот же хост, порт 80/443), не на отдельном порту.
+      authority: window.location.protocol + '//' + window.location.hostname + '/auth/realms/medviz',
       client_id: 'medviz-ohif',
       redirect_uri: '/callback',
       response_type: 'code',
