@@ -14,7 +14,6 @@ import type {
   OperatingMode,
   PatientOut,
   PilotDashboard,
-  PromotionEvidence,
   PromotionGateResult,
   RegistrationOut,
   RegistrationStage,
@@ -177,16 +176,19 @@ export const api = {
   shadowReport: (versionId: string) =>
     request<ShadowReport | SegmentationShadowReport>(`/models/${versionId}/shadow-report`),
 
-  evaluateModel: (candidateId: string, evidence: PromotionEvidence) =>
-    request<PromotionGateResult>(`/models/${candidateId}/evaluate`, {
+  evaluateModel: (candidateId: string) =>
+    request<PromotionGateResult>(`/models/${candidateId}/evaluate`, { method: "POST" }),
+
+  frozenEvaluation: (candidateId: string, result: unknown) =>
+    request<Record<string, unknown>>(`/models/${candidateId}/frozen-evaluation`, {
       method: "POST",
-      body: JSON.stringify(evidence),
+      body: JSON.stringify(result),
     }),
 
-  promoteModel: (candidateId: string, evidence: PromotionEvidence, justification: string) =>
+  promoteModel: (candidateId: string, justification: string) =>
     request<ModelOut>(`/models/${candidateId}/promote`, {
       method: "POST",
-      body: JSON.stringify({ ...evidence, justification }),
+      body: JSON.stringify({ justification }),
     }),
 
   rollbackModel: (versionId: string, reason: string) =>

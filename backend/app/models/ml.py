@@ -60,6 +60,9 @@ class ModelVersion(UUIDMixin, TimestampMixin, Base):
     # Адаптер инференса: {} — веса нашего обучающего контура; {"type": "xrv", "weights": ...} —
     # открытая предобученная модель TorchXRayVision (только для теневой оценки на площадке).
     adapter: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # Свидетельства для гейта продвижения (FR-10), которые нельзя посчитать на сервере:
+    # {"frozen_test": {n, mean_auroc, auroc, frozen_digest, weights_hash, evaluated_at}}.
+    evidence: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
 
 class InferenceResult(UUIDMixin, TimestampMixin, Base):

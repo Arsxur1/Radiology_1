@@ -136,16 +136,22 @@ export interface ShadowReport {
   >;
 }
 
+/** Свидетельства гейта, собранные сервером (не вводятся вручную). */
 export interface PromotionEvidence {
   frozen_test_cases: number;
   frozen_test_superior: boolean;
   shadow_rejection_rate: number | null;
+  shadow_reviewed_cases: number;
   no_regression_on_new_devices: boolean;
+  slice_problems: string[];
+  notes: string[];
+  active_model: string | null;
 }
 
 export interface PromotionGateResult {
   ok: boolean;
   reasons: string[];
+  evidence: PromotionEvidence;
 }
 
 export interface TemporalDelta {

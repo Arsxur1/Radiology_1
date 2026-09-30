@@ -69,6 +69,8 @@ class PromotionCriteria:
     require_no_regression_new_devices: bool = True  # раздел 9, п. 3
     max_rejection_rate: float = 0.15          # доля отклонений врачом в теневом прогоне
     require_candidate_superior: bool = True   # превосходство на замороженном тесте
+    min_shadow_cases: int = 100               # проверенных врачом случаев в теневом прогоне
+    min_slice_cases: int = 20                 # срез (аппарат, возраст) оценивается от стольких случаев
 
 
 def evaluate_promotion(
@@ -120,6 +122,119 @@ def evaluate_promotion(
         reasons.append("Обнаружена деградация на аппаратах, не участвовавших в обучении")
 
     return PromotionGate(ok=not reasons, reasons=reasons)
+
+
+class EvidenceError(Exception):
+    """Загруженный результат замороженного теста не относится к этой модели."""
+
+
+def record_frozen_evaluation(db: Session, model: ModelVersion, result: dict, *, actor: str) -> dict:
+    """Сохранить результат `cli evaluate` (замороженный тест) как свидетельство гейта.
+
+    Результат принимается, только если посчитан на весах именно этой модели: хеш весов
+    из отчёта должен совпасть с зарегистрированным weights_hash (SR-5).
+    """
+    required = ("weights_hash", "frozen_digest", "n", "mean_auroc")
+    missing = [k for k in required if k not in result]
+    if missing:
+        raise EvidenceError(f"В отчёте нет полей: {', '.join(missing)}")
+    if result["weights_hash"] != model.weights_hash:
+        raise EvidenceError("Отчёт посчитан на других весах (weights_hash не совпадает с моделью)")
+    if not isinstance(result["n"], int) or result["n"] <= 0:
+        raise EvidenceError("Объём замороженного теста должен быть положительным")
+    frozen = {k: result.get(k) for k in (*required, "auroc", "evaluated_at")}
+    model.evidence = {**(model.evidence or {}), "frozen_test": frozen}
+    db.flush()
+    audit.record(db, actor=actor, actor_role="admin", action=AuditAction.MODEL_PROMOTE,
+                 entity_type="model_version", entity_id=model.id,
+                 details={"event": "frozen_evaluation", "n": frozen["n"], "mean_auroc": frozen["mean_auroc"],
+                          "frozen_digest": frozen["frozen_digest"]})
+    return frozen
+
+
+def _slice_problems(slices: dict, kind: str, c: PromotionCriteria) -> list[str]:
+    out = []
+    for name, v in (slices or {}).items():
+        rate = v.get("disagreement_rate")
+        if rate is None and v.get("within_tolerance") is not None:   # сегментация: объём вне допуска
+            rate = 1 - v["within_tolerance"]
+        if v.get("cases", v.get("n", 0)) >= c.min_slice_cases and rate is not None and rate > c.max_rejection_rate:
+            out.append(f"{kind} «{name}»: доля расхождений {rate:.0%} > {c.max_rejection_rate:.0%}")
+    return out
+
+
+def collect_evidence(db: Session, candidate: ModelVersion, criteria: PromotionCriteria | None = None) -> dict:
+    """Свидетельства для гейта — из данных платформы, а не со слов администратора.
+
+    - замороженный тест: сохранённый отчёт evaluate на весах кандидата;
+    - превосходство: средний AUROC кандидата выше действующей модели на ТОМ ЖЕ тесте;
+    - теневой прогон: доля расхождений с подписанными заключениями, не меньше
+      min_shadow_cases проверенных случаев;
+    - деградация: срезы по аппаратам и возрастным группам детей с долей расхождений
+      выше порога (срез учитывается от min_slice_cases случаев).
+    """
+    from app.services.shadow_eval import segmentation_shadow_report, shadow_report
+
+    c = criteria or PromotionCriteria()
+    notes: list[str] = []
+    frozen = (candidate.evidence or {}).get("frozen_test") or {}
+    active = db.execute(
+        select(ModelVersion).where(ModelVersion.name == candidate.name, ModelVersion.task == candidate.task,
+                                   ModelVersion.status == ModelStatus.ACTIVE, ModelVersion.id != candidate.id)
+    ).scalars().first()
+    if not frozen:
+        superior = False
+        notes.append("Нет результата замороженного теста для весов кандидата")
+    elif active is None:
+        superior = True
+        notes.append("Действующей модели нет — сравнение на замороженном тесте не требуется")
+    else:
+        base = (active.evidence or {}).get("frozen_test") or {}
+        if base.get("frozen_digest") != frozen.get("frozen_digest"):
+            superior = False
+            notes.append("У действующей модели нет результата на том же замороженном тесте — сравнить нельзя")
+        else:
+            superior = float(frozen["mean_auroc"]) > float(base["mean_auroc"])
+            notes.append(f"AUROC на замороженном тесте: кандидат {frozen['mean_auroc']:.3f}, "
+                         f"действующая {base['mean_auroc']:.3f}")
+
+    if candidate.task == "segmentation":
+        report = segmentation_shadow_report(db, candidate.id)
+        reviewed = report["compared_series"]
+        manufacturers: dict = {}
+    else:
+        report = shadow_report(db, candidate.id)
+        reviewed = report["reviewed_cases"]
+        manufacturers = report["per_manufacturer"]
+    rate = report["disagreement_rate"]
+    if reviewed < c.min_shadow_cases:
+        notes.append(f"Теневой прогон: проверено врачом {reviewed} < {c.min_shadow_cases} случаев")
+        rate = None
+    problems = _slice_problems(manufacturers, "Аппарат", c) + \
+        _slice_problems(report.get("per_age_group", {}), "Возрастная группа", c)
+    return {
+        "frozen_test_cases": int(frozen.get("n") or 0),
+        "frozen_test_superior": superior,
+        "shadow_rejection_rate": rate,
+        "shadow_reviewed_cases": reviewed,
+        "no_regression_on_new_devices": not problems,
+        "slice_problems": problems,
+        "notes": notes,
+        "active_model": f"{active.name}@{active.semver}" if active else None,
+    }
+
+
+def gate_for(db: Session, candidate: ModelVersion, criteria: PromotionCriteria | None = None):
+    """Гейт продвижения по свидетельствам, собранным на сервере. Возвращает (гейт, свидетельства)."""
+    c = criteria or PromotionCriteria()
+    ev = collect_evidence(db, candidate, c)
+    gate = evaluate_promotion(
+        candidate_status=candidate.status, frozen_test_cases=ev["frozen_test_cases"],
+        frozen_test_superior=ev["frozen_test_superior"], shadow_rejection_rate=ev["shadow_rejection_rate"],
+        no_regression_on_new_devices=ev["no_regression_on_new_devices"], criteria=c,
+    )
+    gate.reasons.extend(ev["slice_problems"])
+    return gate, ev
 
 
 def register_candidate(
@@ -182,6 +297,7 @@ def promote(
     gate: PromotionGate,
     actor: str,
     justification: str,
+    evidence: dict | None = None,
 ) -> ModelVersion:
     """Продвинуть кандидата в ACTIVE (шаг 6). Осознанное документированное действие.
 
@@ -223,6 +339,8 @@ def promote(
             "event": "promote",
             "justification": justification,
             "previous_active": str(previous_active.id) if previous_active else None,
+            # Свидетельства на момент решения — для разбора и регулятора.
+            "evidence": {k: v for k, v in (evidence or {}).items() if k != "notes"},
         },
     )
     return candidate

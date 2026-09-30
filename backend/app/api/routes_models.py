@@ -18,11 +18,7 @@ from app.core.roles import Role
 from app.db.session import get_db
 from app.models.ml import ModelVersion
 from app.services import model_registry
-from app.services.model_registry import (
-    PromotionCriteria,
-    PromotionError,
-    evaluate_promotion,
-)
+from app.services.model_registry import PromotionError
 
 router = APIRouter(prefix="/models", tags=["models"])
 
@@ -49,16 +45,8 @@ class RegisterIn(BaseModel):
     adapter: dict = {}
 
 
-class PromotionEvidenceIn(BaseModel):
-    """Свидетельства для гейта продвижения (шаги 4–6)."""
-
-    frozen_test_cases: int
-    frozen_test_superior: bool
-    shadow_rejection_rate: float | None
-    no_regression_on_new_devices: bool
-
-
-class PromoteIn(PromotionEvidenceIn):
+class PromoteIn(BaseModel):
+    # Свидетельства гейт собирает сам (GET /models/{id}/evidence); от человека — только решение.
     justification: str
 
 
@@ -98,26 +86,40 @@ def register_candidate(
     return _out(m)
 
 
-@router.post("/{candidate_id}/evaluate")
-def evaluate(
-    candidate_id: uuid.UUID,
-    payload: PromotionEvidenceIn,
-    db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_roles(Role.ADMIN)),
-) -> dict:
-    """Показать, готов ли кандидат к продвижению, и почему нет (сухой прогон гейта)."""
+def _candidate_or_404(db: Session, candidate_id: uuid.UUID) -> ModelVersion:
     candidate = db.get(ModelVersion, candidate_id)
     if candidate is None:
         raise HTTPException(status_code=404, detail="Кандидат не найден")
-    gate = evaluate_promotion(
-        candidate_status=candidate.status,
-        frozen_test_cases=payload.frozen_test_cases,
-        frozen_test_superior=payload.frozen_test_superior,
-        shadow_rejection_rate=payload.shadow_rejection_rate,
-        no_regression_on_new_devices=payload.no_regression_on_new_devices,
-        criteria=PromotionCriteria(),
-    )
-    return {"ok": gate.ok, "reasons": gate.reasons}
+    return candidate
+
+
+@router.post("/{candidate_id}/evaluate")
+def evaluate(
+    candidate_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.ADMIN)),
+) -> dict:
+    """Готов ли кандидат к продвижению и почему нет. Свидетельства — из данных платформы:
+    замороженный тест, теневой прогон, срезы по аппаратам и возрастным группам."""
+    gate, evidence = model_registry.gate_for(db, _candidate_or_404(db, candidate_id))
+    return {"ok": gate.ok, "reasons": gate.reasons, "evidence": evidence}
+
+
+@router.post("/{candidate_id}/frozen-evaluation")
+def frozen_evaluation(
+    candidate_id: uuid.UUID,
+    result: dict,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_roles(Role.ADMIN)),
+) -> dict:
+    """Загрузить отчёт `cli evaluate` (замороженный тест). Принимается только для весов этой модели."""
+    candidate = _candidate_or_404(db, candidate_id)
+    try:
+        frozen = model_registry.record_frozen_evaluation(db, candidate, result, actor=user.subject)
+    except model_registry.EvidenceError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    db.commit()
+    return frozen
 
 
 @router.get("/{version_id}/shadow-report")
@@ -182,20 +184,11 @@ def promote(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(require_roles(Role.ADMIN)),
 ) -> ModelOut:
-    candidate = db.get(ModelVersion, candidate_id)
-    if candidate is None:
-        raise HTTPException(status_code=404, detail="Кандидат не найден")
-    gate = evaluate_promotion(
-        candidate_status=candidate.status,
-        frozen_test_cases=payload.frozen_test_cases,
-        frozen_test_superior=payload.frozen_test_superior,
-        shadow_rejection_rate=payload.shadow_rejection_rate,
-        no_regression_on_new_devices=payload.no_regression_on_new_devices,
-    )
+    gate, evidence = model_registry.gate_for(db, _candidate_or_404(db, candidate_id))
     try:
         m = model_registry.promote(
             db, candidate_id=candidate_id, gate=gate,
-            actor=user.subject, justification=payload.justification,
+            actor=user.subject, justification=payload.justification, evidence=evidence,
         )
         db.commit()
     except PromotionError as e:

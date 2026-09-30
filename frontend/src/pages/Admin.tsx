@@ -11,7 +11,6 @@ import type {
   ModeOut,
   ModelOut,
   OperatingMode,
-  PromotionEvidence,
   PromotionGateResult,
   CalibrationProposal,
   SegmentationShadowReport,
@@ -240,15 +239,87 @@ function ModesSection() {
   );
 }
 
-const EMPTY_EVIDENCE: PromotionEvidence = {
-  frozen_test_cases: 0,
-  frozen_test_superior: false,
-  shadow_rejection_rate: null,
-  no_regression_on_new_devices: false,
-};
+function FrozenUpload({ modelId, onDone }: { modelId: string; onDone: () => void }) {
+  const [text, setText] = useState("");
+  const [open, setOpen] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function send() {
+    setErr(null);
+    try {
+      await api.frozenEvaluation(modelId, JSON.parse(text));
+      setOpen(false);
+      setText("");
+      onDone();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : e instanceof SyntaxError ? "Это не JSON" : String(e));
+    }
+  }
+  if (!open) return <button onClick={() => setOpen(true)}>Загрузить результат замороженного теста</button>;
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div className="muted" style={{ fontSize: 12 }}>
+        Вставьте JSON, который выдал <code>cli evaluate</code> на обучающем сервере (только метрики, без
+        изображений). Принимается, только если посчитан на весах этой модели.
+      </div>
+      <textarea rows={5} style={{ width: "100%" }} value={text} onChange={(e) => setText(e.target.value)} />
+      <div className="row">
+        <button className="primary" onClick={send} disabled={!text.trim()}>
+          Сохранить
+        </button>
+        <button onClick={() => setOpen(false)}>Отмена</button>
+      </div>
+      {err && <div className="error">{err}</div>}
+    </div>
+  );
+}
+
+function EvidenceView({ gate }: { gate: PromotionGateResult }) {
+  const e = gate.evidence;
+  return (
+    <div style={{ marginTop: 6 }}>
+      <table>
+        <tbody>
+          <tr>
+            <td>Замороженный тест</td>
+            <td>{e.frozen_test_cases} исследований</td>
+          </tr>
+          <tr>
+            <td>Лучше действующей модели</td>
+            <td>{e.frozen_test_superior ? "да" : "нет"}{e.active_model ? ` (${e.active_model})` : ""}</td>
+          </tr>
+          <tr>
+            <td>Теневой прогон</td>
+            <td>
+              проверено врачом {e.shadow_reviewed_cases}; расхождений{" "}
+              {e.shadow_rejection_rate === null ? "—" : `${Math.round(e.shadow_rejection_rate * 100)}%`}
+            </td>
+          </tr>
+          <tr>
+            <td>Аппараты и возрастные группы</td>
+            <td>{e.no_regression_on_new_devices ? "без деградации" : "есть деградация"}</td>
+          </tr>
+        </tbody>
+      </table>
+      {e.notes.map((n, i) => (
+        <div key={i} className="muted" style={{ fontSize: 12 }}>
+          {n}
+        </div>
+      ))}
+      <div className={gate.ok ? "" : "error"} style={{ marginTop: 4 }}>
+        {gate.ok ? "Готов к продвижению ✓" : "Нельзя продвинуть:"}
+        {!gate.ok && (
+          <ul>
+            {gate.reasons.map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void }) {
-  const [ev, setEv] = useState<PromotionEvidence>(EMPTY_EVIDENCE);
   const [gate, setGate] = useState<PromotionGateResult | null>(null);
   const [shadow, setShadow] = useState<ShadowReport | SegmentationShadowReport | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -284,59 +355,23 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
 
       {model.status === "shadow" && (
         <div style={{ marginTop: 8 }}>
-          <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
-            <label>
-              Замороженный тест:{" "}
-              <input
-                type="number"
-                style={{ width: 90 }}
-                value={ev.frozen_test_cases}
-                onChange={(e) => setEv({ ...ev, frozen_test_cases: Number(e.target.value) })}
-              />
-            </label>
-            <label>
-              Доля отклонений:{" "}
-              <input
-                type="number"
-                step="0.01"
-                style={{ width: 90 }}
-                value={ev.shadow_rejection_rate ?? ""}
-                onChange={(e) =>
-                  setEv({ ...ev, shadow_rejection_rate: e.target.value === "" ? null : Number(e.target.value) })
-                }
-              />
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={ev.frozen_test_superior}
-                onChange={(e) => setEv({ ...ev, frozen_test_superior: e.target.checked })}
-              />{" "}
-              превзошёл на тесте
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={ev.no_regression_on_new_devices}
-                onChange={(e) => setEv({ ...ev, no_regression_on_new_devices: e.target.checked })}
-              />{" "}
-              без деградации на новых аппаратах
-            </label>
+          <div className="muted" style={{ fontSize: 12 }}>
+            Свидетельства для продвижения платформа собирает сама: замороженный тест, теневой прогон
+            против подписанных заключений, срезы по аппаратам и возрастным группам.
           </div>
+          <FrozenUpload modelId={model.id} onDone={() => setGate(null)} />
           <div className="row" style={{ marginTop: 8 }}>
             <button
               onClick={() =>
                 guard(async () => {
                   const r = await api.shadowReport(model.id);
                   setShadow(r);
-                  // Доля расхождений с подписанными заключениями — оценка доли отклонений.
-                  setEv((cur) => ({ ...cur, shadow_rejection_rate: r.disagreement_rate }));
                 })
               }
             >
               Сравнить с заключениями
             </button>
-            <button onClick={() => guard(async () => setGate(await api.evaluateModel(model.id, ev)))}>
+            <button onClick={() => guard(async () => setGate(await api.evaluateModel(model.id)))}>
               Проверить готовность
             </button>
             <button
@@ -345,7 +380,7 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
                 guard(async () => {
                   const justification = window.prompt("Обоснование продвижения (обязательно):") ?? "";
                   if (!justification.trim()) throw new ApiError(400, "Требуется обоснование");
-                  await api.promoteModel(model.id, ev, justification);
+                  await api.promoteModel(model.id, justification);
                   setGate(null);
                 })
               }
@@ -355,18 +390,7 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
           </div>
           {shadow &&
             (shadow.task === "segmentation" ? <SegShadowView report={shadow} /> : <ShadowReportView report={shadow} />)}
-          {gate && (
-            <div style={{ marginTop: 6 }} className={gate.ok ? "" : "error"}>
-              {gate.ok ? "Готов к продвижению ✓" : "Нельзя продвинуть:"}
-              {!gate.ok && (
-                <ul>
-                  {gate.reasons.map((r, i) => (
-                    <li key={i}>{r}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
+          {gate && <EvidenceView gate={gate} />}
         </div>
       )}
 
