@@ -9,7 +9,8 @@
 Для визуальной проверки врачом строится превью-«шахматка» (фиксированная | совмещённая)
 по трём центральным срезам.
 
-Детерминированность (FR-6): фиксированное зерно выборки метрики и один поток.
+Детерминированность (FR-6): фиксированное зерно выборки метрики и фиксированное число потоков
+(одинаковое разбиение работы → одинаковый результат на любом сервере).
 """
 
 from __future__ import annotations
@@ -21,8 +22,10 @@ from app.models.registration import RegistrationStage
 from app.services.registration import STAGE_ORDER, RegistrationEngine, RegistrationOutput
 
 SEED = 20260930
-WORK_SPACING_MM = 2.0      # рабочая сетка: быстрее и устойчивее, чем исходное разрешение
+WORK_SPACING_MM = 2.0      # рабочая сетка: не мельче 2 мм и не мельче исходных вокселей
+THREADS = 4
 BSPLINE_MESH_MM = 50.0     # шаг сетки контрольных точек B-сплайна
+BSPLINE_ITERATIONS = 100   # лимит итераций L-BFGS-B на уровень пирамиды
 
 
 def _mattes(reg, bins: int = 50) -> None:
@@ -89,16 +92,18 @@ def register_images(fixed, moving, up_to_stage: RegistrationStage) -> tuple:
     """Совместить два 3D-изображения. Возвращает (итоговое преобразование, качество)."""
     import SimpleITK as sitk
 
-    sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(1)
+    sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(THREADS)
     started = time.monotonic()
-    fixed = resample_iso(sitk.Cast(fixed, sitk.sitkFloat32))
-    moving = resample_iso(sitk.Cast(moving, sitk.sitkFloat32))
+    # Не увеличиваем сетку сверх исходного разрешения: это только замедляет расчёт.
+    spacing = max(WORK_SPACING_MM, min(min(fixed.GetSpacing()), min(moving.GetSpacing())))
+    fixed = resample_iso(sitk.Cast(fixed, sitk.sitkFloat32), spacing)
+    moving = resample_iso(sitk.Cast(moving, sitk.sitkFloat32), spacing)
     stages = STAGE_ORDER[: STAGE_ORDER.index(up_to_stage) + 1]
 
     init = sitk.CenteredTransformInitializer(fixed, moving, sitk.Euler3DTransform(),
                                              sitk.CenteredTransformInitializerFilter.GEOMETRY)
     quality: dict = {"engine": "simpleitk", "engine_version": sitk.Version_VersionString(),
-                     "work_spacing_mm": WORK_SPACING_MM,
+                     "work_spacing_mm": round(spacing, 2),
                      "mi_initial": mutual_information(fixed, moving, init),
                      "dice_initial": dice(fixed, moving, init), "stages": {}}
 
@@ -122,14 +127,25 @@ def register_images(fixed, moving, up_to_stage: RegistrationStage) -> tuple:
         affine.SetMatrix(euler.GetMatrix())
         affine.SetTranslation(euler.GetTranslation())
         affine.SetCenter(euler.GetCenter())
-        reg = sitk.ImageRegistrationMethod()
-        _mattes(reg)
-        # Для 12 параметров аффинной устойчивее сопряжённые градиенты с линейным поиском.
-        reg.SetOptimizerAsConjugateGradientLineSearch(learningRate=1.0, numberOfIterations=100,
-                                                      convergenceMinimumValue=1e-6, convergenceWindowSize=10)
-        reg.SetOptimizerScalesFromPhysicalShift()
-        reg.SetInitialTransform(affine, inPlace=False)
-        candidate = _run(reg, fixed, moving)
+        # Быстрый градиентный спуск; если он ухудшил MI (бывает при сильном различии
+        # контрастов) — повтор сопряжёнными градиентами с линейным поиском: медленнее, устойчивее.
+        candidate = None
+        for optimizer in ("rsgd", "cg"):
+            reg = sitk.ImageRegistrationMethod()
+            _mattes(reg)
+            if optimizer == "rsgd":
+                reg.SetOptimizerAsRegularStepGradientDescent(learningRate=0.5, minStep=1e-4,
+                                                             numberOfIterations=200, relaxationFactor=0.5)
+            else:
+                reg.SetOptimizerAsConjugateGradientLineSearch(learningRate=1.0, numberOfIterations=100,
+                                                              convergenceMinimumValue=1e-6,
+                                                              convergenceWindowSize=10)
+            reg.SetOptimizerScalesFromPhysicalShift()
+            reg.SetInitialTransform(sitk.AffineTransform(affine), inPlace=False)
+            candidate = _run(reg, fixed, moving)
+            if mutual_information(fixed, moving, candidate) >= quality["stages"]["rigid"]["mi"] - 1e-3:
+                break
+        quality["affine_optimizer"] = optimizer
         transform = _accept_stage(quality, "affine", fixed, moving, candidate, transform)
 
     # 3. Деформируемая: B-сплайн поверх аффинной.
@@ -139,8 +155,9 @@ def register_images(fixed, moving, up_to_stage: RegistrationStage) -> tuple:
         bspline = sitk.BSplineTransformInitializer(fixed, mesh)
         reg = sitk.ImageRegistrationMethod()
         _mattes(reg)
-        reg.SetOptimizerAsLBFGSB(gradientConvergenceTolerance=1e-5, numberOfIterations=100,
-                                 maximumNumberOfCorrections=5, maximumNumberOfFunctionEvaluations=500)
+        reg.SetOptimizerAsLBFGSB(gradientConvergenceTolerance=1e-5, numberOfIterations=BSPLINE_ITERATIONS,
+                                 maximumNumberOfCorrections=5,
+                                 maximumNumberOfFunctionEvaluations=5 * BSPLINE_ITERATIONS)
         reg.SetMovingInitialTransform(transform)
         reg.SetInitialTransform(bspline, inPlace=True)
         reg.SetShrinkFactorsPerLevel([2, 1])
