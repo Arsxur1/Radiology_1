@@ -91,3 +91,8 @@ def test_empty_pacs_settings_mean_not_configured(monkeypatch):
         monkeypatch.setenv(k, "")
     s = Settings(_env_file=None)
     assert s.pacs_port is None and not s.pacs_configured
+
+
+def test_parse_qido_multivalued_modalities():
+    item = {"0020000D": {"Value": ["1.2.3"]}, "00080061": {"Value": ["CT", "SR"]}}
+    assert _parse_qido_study(item).modality == "CT/SR"

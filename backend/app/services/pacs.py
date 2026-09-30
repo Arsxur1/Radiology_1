@@ -168,7 +168,7 @@ def find_studies(node: PacsNode, query: StudyQuery, timeout: int = 30) -> QueryO
                         study_instance_uid=str(getattr(identifier, "StudyInstanceUID", "")),
                         patient_id=str(getattr(identifier, "PatientID", "")) or None,
                         study_date=str(getattr(identifier, "StudyDate", "")) or None,
-                        modality=str(getattr(identifier, "ModalitiesInStudy", "")) or None,
+                        modality=_modalities(getattr(identifier, "ModalitiesInStudy", None)),
                         description=str(getattr(identifier, "StudyDescription", "")) or None,
                         series_count=_safe_int(getattr(identifier, "NumberOfStudyRelatedSeries", None)),
                     )
@@ -235,6 +235,15 @@ def store_datasets(node: PacsNode, datasets: list) -> list[int]:
     finally:
         assoc.release()
     return statuses
+
+
+def _modalities(value) -> str | None:
+    """ModalitiesInStudy бывает многозначным (КТ + заключение SR) → «CT/SR», а не «['CT', 'SR']»."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, str):
+        return value or None
+    return "/".join(str(v) for v in value) or None
 
 
 def _safe_int(value) -> int | None:

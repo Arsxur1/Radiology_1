@@ -44,7 +44,7 @@ def _parse_qido_study(item: dict) -> FoundStudy:
         study_instance_uid=_tag(item, "0020000D") or "",
         patient_id=_tag(item, "00100020"),
         study_date=_tag(item, "00080020"),
-        modality=_tag(item, "00080061"),          # ModalitiesInStudy
+        modality="/".join(str(v) for v in (item.get("00080061") or {}).get("Value") or []) or None,  # многозначное
         description=_tag(item, "00081030"),
         series_count=_safe_int(_tag(item, "00201206")),
     )

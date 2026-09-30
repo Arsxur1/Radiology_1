@@ -89,7 +89,8 @@ def dicom_net():
             r.PatientID = first.PatientID
             r.PatientName = first.PatientName
             r.StudyDate = first.StudyDate
-            r.ModalitiesInStudy = first.Modality
+            # У первого исследования — ещё и заключение SR: многозначное поле, как у Orthanc.
+            r.ModalitiesInStudy = ["CT", "SR"] if uid.endswith(".1") else first.Modality
             r.StudyDescription = first.StudyDescription
             r.NumberOfStudyRelatedSeries = 1
             yield 0xFF00, r
@@ -146,6 +147,7 @@ def test_find_by_patient(dicom_net):
     by_uid = {s.study_instance_uid: s for s in found.studies}
     assert set(by_uid) == {"1.2.826.0.1.1", "1.2.826.0.1.2"}
     assert by_uid["1.2.826.0.1.2"].modality == "MR"
+    assert by_uid["1.2.826.0.1.1"].modality == "CT/SR"
     assert by_uid["1.2.826.0.1.1"].study_date == "20250101"
     assert by_uid["1.2.826.0.1.1"].series_count == 1
 

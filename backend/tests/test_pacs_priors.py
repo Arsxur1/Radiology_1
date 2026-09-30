@@ -60,7 +60,7 @@ def test_priors_listed_without_phi(setup, db):
     r = client.get(f"/studies/{st.id}/pacs-priors", headers=H)
     assert r.status_code == 200, r.text
     rows = r.json()
-    assert [(x["study_date"], x["modality"]) for x in rows] == [("20260315", "MR"), ("20250101", "CT")]
+    assert [(x["study_date"], x["modality"]) for x in rows] == [("20260315", "MR"), ("20250101", "CT/SR")]
     current = rows[1]
     assert current["is_current"] is True and current["imported_study_id"] == str(st.id)
     assert rows[0]["imported_study_id"] is None
