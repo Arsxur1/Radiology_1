@@ -4,8 +4,8 @@
 # Использует узел PACS из .env (PACS_AET/PACS_HOST/PACS_PORT). Запускать после
 # заполнения параметров:  bash scripts/check_pacs.sh
 #
-# Требует запущенный backend (make up) и, для классического DICOM, зависимость
-# коннектора:  docker compose exec backend pip install -e '.[pacs]'
+# Требует запущенный backend (make up). Подробная пошаговая диагностика с подсказками —
+# make pacs-connect-check.
 set -euo pipefail
 
 BACKEND="${BACKEND_URL:-http://localhost:8000}"

@@ -162,4 +162,4 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/)" = 301
           ! curl -sf https://127.0.0.1:8443/ >/dev/null 2>&1   # без доверия к CA клиники — отказ
       - name: Сервисы backend импортируются в образе
-        run: docker run --rm -e PYTHONPATH=/app medviz-backend python -c "import app.main, app.workers.orthanc_watcher, app.workers.classification_tasks; print('ok')"
+        run: docker run --rm -e PYTHONPATH=/app medviz-backend python -c "import app.main, app.workers.orthanc_watcher, app.workers.classification_tasks, pynetdicom, app.services.pacs_diagnose; print('ok')"

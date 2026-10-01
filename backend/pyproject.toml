@@ -18,6 +18,9 @@ dependencies = [
     "httpx>=0.27",
     "pyjwt[crypto]>=2.15.1",  # python-jose тянул ecdsa с неисправленной уязвимостью
     "watchdog>=4.0",
+    # DICOM-сеть с PACS клиники (C-ECHO/C-FIND/C-MOVE, отправка заключения SR) — нужна в
+    # каждом образе; раньше была только в extras [pacs], и в образе backend её не было.
+    "pynetdicom>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -36,9 +39,7 @@ dev = [
     "pynetdicom>=2.0",
 ]
 # Коннектор к внешнему PACS по классическому DICOM-сетевому протоколу (FR-1).
-pacs = [
-    "pynetdicom>=2.0",
-]
+pacs = []   # оставлено для совместимости: pynetdicom теперь в основных зависимостях
 # Инференс классификатора находок на продуктивном сервере (воркер). CPU достаточно:
 # один рентген ОГК — доли секунды–секунды на DenseNet-121.
 infer = [

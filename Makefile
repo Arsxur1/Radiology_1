@@ -1,4 +1,4 @@
-.PHONY: help up down logs build migrate revision test lint fmt seed backup backup-install tls-cert check-pacs xrv-candidate totalseg-candidate restore keycloak-configure
+.PHONY: help up down logs build migrate revision test lint fmt seed backup backup-install tls-cert check-pacs pacs-connect-check eval-peds-cxr xrv-candidate totalseg-candidate restore keycloak-configure
 
 help:
 	@echo "up         — поднять весь стек (docker compose up -d --build)"
@@ -15,6 +15,7 @@ help:
 	@echo "tls-cert   — центр сертификации клиники и сертификат шлюза: make tls-cert HOST=<IP>"
 	@echo "restore    — восстановление: make restore BACKUP=backups/<дата-время>"
 	@echo "check-pacs — проверить связь с настроенным PACS (.env)"
+	@echo "pacs-connect-check — пошаговая диагностика PACS с подсказками; WAIT=15 — дождаться тестового исследования"
 	@echo "totalseg-candidate — кандидат сегментации КТ на TotalSegmentator (без GPU, быстрый режим)"
 	@echo "xrv-candidate — кандидат из открытой модели для теневого прогона (без GPU)"
 	@echo "seed       — загрузить демо-данные для показа (без PACS/GPU)"
@@ -69,6 +70,11 @@ restore:
 
 check-pacs:
 	bash scripts/check_pacs.sh
+
+# Пошаговая проверка подключения PACS с подсказками «что сделать»; WAIT=15 — ждать тестовое
+# исследование от PACS и проверить, что оно пришло обезличенным.
+pacs-connect-check:
+	docker compose exec -e PYTHONPATH=/app backend python scripts/pacs_connect_check.py --wait $${WAIT:-0}
 
 seed:
 	docker compose exec -e PYTHONPATH=/app backend python scripts/seed_demo.py --with-storage

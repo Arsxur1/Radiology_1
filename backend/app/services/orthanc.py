@@ -38,6 +38,16 @@ class OrthancClient:
         r.raise_for_status()
         return r.json()
 
+    def instance_count(self) -> int:
+        return int(self._client.get("/statistics").raise_for_status().json()["CountInstances"])
+
+    def find_study_instance(self, study_instance_uid: str) -> str | None:
+        """ID одного инстанса исследования (для проверки обезличивания) или None."""
+        r = self._client.post("/tools/find", json={"Level": "Instance", "Limit": 1,
+                                                   "Query": {"StudyInstanceUID": study_instance_uid}})
+        ids = r.raise_for_status().json()
+        return ids[0] if ids else None
+
     def instances_with_reception(self) -> list[tuple[str, str | None]]:
         """Все инстансы узла и время приёма (метаданные Orthanc ReceptionDate, «YYYYMMDDTHHMMSS»)."""
         out = []
