@@ -194,3 +194,16 @@ def test_audit_verify_reports_where_chain_breaks(db):
     db.commit()
     assert audit.verify_chain_report(db, batch=2) == {"intact": False, "checked": 2, "broken_at_seq": 3}
     assert audit.verify_chain(db) is False
+
+
+def test_audit_csv_neutralizes_formulas(client, db):
+    from app.api.routes_audit import csv_safe
+    from app.models.audit import AuditAction
+    from app.services import audit
+
+    assert csv_safe('=HYPERLINK("http://x","y")').startswith("'=")
+    assert csv_safe("+7 999") == "'+7 999" and csv_safe("dr.ivanov") == "dr.ivanov" and csv_safe(None) == ""
+    audit.record(db, actor="=cmd|' /C calc'!A0", action=AuditAction.PATIENT_ACCESS, entity_type="study")
+    db.commit()
+    body = client.get("/audit/export.csv", headers=_as("auditor")).text
+    assert "'=cmd" in body and ",=cmd" not in body

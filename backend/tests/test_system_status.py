@@ -103,3 +103,18 @@ def test_disk_thresholds():
     assert disk_state(100 * gb, 8 * gb)[0] is False                    # меньше 10 ГБ — тоже
     st = summarize(_checks(disk=(False, False)))
     assert st["functions"]["ingest"] == "down" and st["functions"]["viewer"] == "ok"
+
+
+def test_debug_auth_marks_system_down():
+    st = summarize(_checks() + [Check("debug_auth", False, "включён")])
+    assert st["status"] == "down"
+
+
+def test_gateway_strips_debug_headers():
+    from pathlib import Path
+
+    conf = (Path(__file__).resolve().parents[2] / "infra/nginx/locations.conf.template").read_text(encoding="utf-8")
+    api = conf[conf.index("location /api/"):conf.index("}", conf.index("location /api/"))]
+    auth = conf[conf.index("location = /_auth"):conf.index("}", conf.index("location = /_auth"))]
+    for block in (api, auth):
+        assert 'proxy_set_header X-Debug-Subject "";' in block and 'proxy_set_header X-Debug-Roles "";' in block

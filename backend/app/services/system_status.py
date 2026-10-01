@@ -98,6 +98,16 @@ def check_disk() -> tuple[bool, str, bool]:
     return disk_state(u.total, u.free)
 
 
+def check_debug_auth() -> tuple[bool, str]:
+    """Отладочный вход (любая роль по заголовку) в рабочей системе — недопустим."""
+    from app.core.config import get_settings
+
+    if get_settings().allow_debug_auth:
+        return False, ("ALLOW_DEBUG_AUTH=true: вход по заголовку без пароля включён — выключите в .env "
+                       "(через шлюз он заблокирован, но API на самом сервере открыт)")
+    return True, "выключен"
+
+
 def check_raw_backlog() -> tuple[bool, str, bool]:
     """Снимки, застрявшие в orthanc-raw: исходники с ФИО, не дошедшие до врача."""
     from datetime import UTC, datetime
@@ -182,6 +192,7 @@ def collect() -> dict:
         run("orthanc_raw", lambda: check_orthanc(raw_client)),
         run("watcher", lambda: check_watcher(r)),
         run("raw_backlog", check_raw_backlog),
+        run("debug_auth", check_debug_auth),
         run("disk", check_disk),
         run("queue", lambda: check_queue(r)),
         run("workers", check_workers),
@@ -206,6 +217,9 @@ def summarize(checks: list[Check]) -> dict:
                          "redis", "s3", "disk"]),
         "ai": state(["workers", "models", "s3"]),
     }
+    if not by.get("debug_auth", Check("", True, "")).ok:
+        return {"status": "down", "functions": functions, "checks": [asdict(c) for c in checks],
+                "checked_at": time.time()}
     overall = "down" if "down" in (functions["viewer"], functions["ingest"]) else \
         "degraded" if any(v != "ok" for v in functions.values()) or by.get("backup", Check("", True, "")).warn \
         else "ok"

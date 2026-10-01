@@ -171,7 +171,9 @@ export async function handleCallback(search: string): Promise<string> {
     client_id: clientId,
     code_verifier: saved.verifier,
   });
-  return saved.returnTo || "/";
+  // Только внутренний путь приложения: «//host» или «https://…» увели бы на чужой сайт.
+  const to = typeof saved.returnTo === "string" ? saved.returnTo : "/";
+  return to.startsWith("/") && !to.startsWith("//") ? to : "/";
 }
 
 export function oidcAccessToken(): string | null {

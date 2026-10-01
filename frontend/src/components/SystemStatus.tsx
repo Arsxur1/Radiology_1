@@ -15,6 +15,7 @@ const NAMES: Record<string, string> = {
   watcher: "Наблюдатель приёма",
   raw_backlog: "Застрявшие в приёмнике (с ФИО)",
   disk: "Диск с данными",
+  debug_auth: "Отладочный вход без пароля",
   queue: "Очередь задач",
   workers: "Воркеры анализа",
   models: "Действующие модели",

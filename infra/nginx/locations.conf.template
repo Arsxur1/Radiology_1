@@ -15,6 +15,10 @@ location / {
 location /api/ {
     proxy_pass http://backend:8000/;
     proxy_set_header Host $host;
+    # Отладочный вход (X-Debug-*) из сети клиники невозможен, даже если ALLOW_DEBUG_AUTH
+    # по ошибке включён: шлюз вырезает эти заголовки.
+    proxy_set_header X-Debug-Subject "";
+    proxy_set_header X-Debug-Roles "";
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_read_timeout 120s;
 }
@@ -24,6 +28,8 @@ location = /_auth {
     internal;
     proxy_pass http://backend:8000/auth/check;
     proxy_pass_request_body off;
+    proxy_set_header X-Debug-Subject "";
+    proxy_set_header X-Debug-Roles "";
     proxy_set_header Content-Length "";
     proxy_set_header Authorization $http_authorization;
 }
@@ -54,7 +60,10 @@ location /wado {
 
 # Keycloak за шлюзом: с сертификатом пароли сотрудников идут только по HTTPS.
 location /auth/ {
-    proxy_pass http://keycloak:8080/auth/;
+    # Адрес через переменную: имя разрешается при запросе, а не при старте — шлюз
+    # поднимается, даже если Keycloak ещё запускается (иначе падал бы весь вход в систему).
+    set $keycloak_upstream http://keycloak:8080;
+    proxy_pass $keycloak_upstream;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;

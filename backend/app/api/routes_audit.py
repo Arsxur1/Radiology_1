@@ -77,6 +77,13 @@ def audit_actions(_: CurrentUser = Depends(READERS)) -> list[str]:
     return [a.value for a in AuditAction]
 
 
+def csv_safe(value) -> str:
+    """Ячейка CSV без CSV-инъекции: Excel выполняет как формулу текст, начинающийся с
+    = + - @ (и табуляции/перевода строки) — такой текст экранируется апострофом."""
+    s = "" if value is None else str(value)
+    return "'" + s if s[:1] in ("=", "+", "-", "@", "\t", "\r") else s
+
+
 @router.get("/export.csv")
 def export_csv(
     actor: str | None = None,
@@ -97,8 +104,9 @@ def export_csv(
     w = csv.writer(buf)
     w.writerow(["seq", "time_utc", "actor", "roles", "action", "entity_type", "entity_id", "details", "entry_hash"])
     for r in rows:
-        w.writerow([r.seq, r.created_at.isoformat(), r.actor, r.actor_role or "", r.action.value,
-                    r.entity_type or "", r.entity_id or "", json.dumps(r.details, ensure_ascii=False), r.entry_hash])
+        w.writerow([csv_safe(v) for v in (
+            r.seq, r.created_at.isoformat(), r.actor, r.actor_role or "", r.action.value, r.entity_type or "",
+            r.entity_id or "", json.dumps(r.details, ensure_ascii=False), r.entry_hash)])
     audit.record_access(db, user, AuditAction.EXPORT, entity_type="audit_log",
                         details={"what": "выгрузка журнала аудита", "rows": len(rows),
                                  "filter": {"actor": actor, "action": action, "entity_type": entity_type,
