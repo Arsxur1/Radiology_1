@@ -103,7 +103,9 @@
 ## 2а. Старт теневого прогона без GPU (сразу после подключения PACS)
 
 - [ ] **ИТ** `.env`: `WORKER_EXTRAS=[infer]`, `docker compose build worker`, `make xrv-candidate`.
-- [ ] **Админ** Зарегистрировать `models/xrv_all-*.registration.json` → SHADOW.
+- [ ] **Админ** Зарегистрировать `models/xrv_nih-*.registration.json` → SHADOW (по умолчанию — веса `-nih`).
+      Открытые модели на детях слабы и пороги не переносятся между больницами
+      (`VALIDATSIYA-DETI.md`): только SHADOW, в ASSIST — после калибровки и свидетельств NCMC.
 - [ ] **ИТ** `make totalseg-candidate` → зарегистрировать `models/totalseg_ct_fast-*.registration.json`:
       сегментация органов КТ (~1 мин на исследование на CPU) в теневом прогоне.
       Для МРТ: `docker compose run ... scripts/totalseg_candidate.py --task total_mr` → `totalseg_mr_fast`.

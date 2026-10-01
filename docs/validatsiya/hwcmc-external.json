@@ -1,0 +1,320 @@
+{
+  "dataset": "HWCMC, Hainan Women and Children's Medical Center (0–14 лет)",
+  "citation": "Yu J. The HWCMC dataset. Zenodo, 2024. doi:10.5281/zenodo.13744272. CC BY 4.0.",
+  "splits": "весь набор (частей нет)",
+  "models": {
+    "densenet121-res224-nih": {
+      "n": {
+        "normal": 2291,
+        "bacterial": 1108,
+        "viral": 300,
+        "mixed": 1330,
+        "mycoplasma": 603,
+        "total": 5632
+      },
+      "any_finding_auroc": 0.640688,
+      "any_finding_auroc_ci95": [
+        0.625,
+        0.6554
+      ],
+      "normal_with_any_draft": 0.5369,
+      "normal_mean_drafts": 0.884,
+      "pneumonia_with_any_draft": 0.7576,
+      "bacterial_with_any_draft": 0.7356,
+      "viral_with_any_draft": 0.74,
+      "with_any_draft_by_kind": {
+        "normal": 0.5369,
+        "bacterial": 0.7356,
+        "viral": 0.74,
+        "mixed": 0.8278,
+        "mycoplasma": 0.6517
+      },
+      "per_code": {
+        "CXR-100": {
+          "auroc": 0.679065,
+          "draft_rate_normal": 0.0471,
+          "draft_rate_pneumonia": 0.12,
+          "threshold": 0.55
+        },
+        "CXR-101": {
+          "auroc": 0.698063,
+          "draft_rate_normal": 0.031,
+          "draft_rate_pneumonia": 0.1482,
+          "threshold": 0.55
+        },
+        "CXR-102": {
+          "auroc": 0.668084,
+          "draft_rate_normal": 0.0223,
+          "draft_rate_pneumonia": 0.0748,
+          "threshold": 0.55
+        },
+        "CXR-103": {
+          "auroc": 0.633254,
+          "draft_rate_normal": 0.0655,
+          "draft_rate_pneumonia": 0.1368,
+          "threshold": 0.55
+        },
+        "CXR-104": {
+          "auroc": 0.608935,
+          "draft_rate_normal": 0.4601,
+          "draft_rate_pneumonia": 0.6324,
+          "threshold": 0.55
+        },
+        "CXR-111": {
+          "auroc": 0.653147,
+          "draft_rate_normal": 0.007,
+          "draft_rate_pneumonia": 0.0207,
+          "threshold": 0.55
+        },
+        "CXR-114": {
+          "auroc": 0.707436,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.55
+        },
+        "CXR-115": {
+          "auroc": 0.673899,
+          "draft_rate_normal": 0.0236,
+          "draft_rate_pneumonia": 0.0569,
+          "threshold": 0.55
+        },
+        "CXR-200": {
+          "auroc": 0.606584,
+          "draft_rate_normal": 0.0725,
+          "draft_rate_pneumonia": 0.1916,
+          "threshold": 0.55
+        },
+        "CXR-201": {
+          "auroc": 0.693318,
+          "draft_rate_normal": 0.0367,
+          "draft_rate_pneumonia": 0.1419,
+          "threshold": 0.55
+        },
+        "CXR-202": {
+          "auroc": 0.612044,
+          "draft_rate_normal": 0.1152,
+          "draft_rate_pneumonia": 0.1957,
+          "threshold": 0.55
+        },
+        "CXR-500": {
+          "auroc": 0.563312,
+          "draft_rate_normal": 0.0035,
+          "draft_rate_pneumonia": 0.0132,
+          "threshold": 0.55
+        }
+      },
+      "reference_raw_pneumonia_output_auroc": 0.675758,
+      "external_calibration_check": {
+        "source": "report-calib.json",
+        "by_rate": {
+          "0.01": {
+            "normal_with_any_draft": 0.1947,
+            "normal_mean_drafts": 0.288,
+            "pneumonia_with_any_draft": 0.446,
+            "with_any_draft_by_kind": {
+              "normal": 0.1947,
+              "bacterial": 0.4215,
+              "viral": 0.41,
+              "mixed": 0.5286,
+              "mycoplasma": 0.3267
+            }
+          },
+          "0.02": {
+            "normal_with_any_draft": 0.2379,
+            "normal_mean_drafts": 0.361,
+            "pneumonia_with_any_draft": 0.504,
+            "with_any_draft_by_kind": {
+              "normal": 0.2379,
+              "bacterial": 0.4684,
+              "viral": 0.4667,
+              "mixed": 0.5932,
+              "mycoplasma": 0.3914
+            }
+          },
+          "0.05": {
+            "normal_with_any_draft": 0.2903,
+            "normal_mean_drafts": 0.451,
+            "pneumonia_with_any_draft": 0.5528,
+            "with_any_draft_by_kind": {
+              "normal": 0.2903,
+              "bacterial": 0.5126,
+              "viral": 0.5133,
+              "mixed": 0.6391,
+              "mycoplasma": 0.4561
+            }
+          }
+        }
+      },
+      "seconds": 884.4
+    },
+    "densenet121-res224-all": {
+      "n": {
+        "normal": 2291,
+        "bacterial": 1108,
+        "viral": 300,
+        "mixed": 1330,
+        "mycoplasma": 603,
+        "total": 5632
+      },
+      "any_finding_auroc": 0.660223,
+      "any_finding_auroc_ci95": [
+        0.6466,
+        0.6748
+      ],
+      "normal_with_any_draft": 0.1624,
+      "normal_mean_drafts": 0.166,
+      "pneumonia_with_any_draft": 0.39,
+      "bacterial_with_any_draft": 0.3357,
+      "viral_with_any_draft": 0.3333,
+      "with_any_draft_by_kind": {
+        "normal": 0.1624,
+        "bacterial": 0.3357,
+        "viral": 0.3333,
+        "mixed": 0.4571,
+        "mycoplasma": 0.3698
+      },
+      "per_code": {
+        "CXR-100": {
+          "auroc": 0.708657,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.8885
+        },
+        "CXR-101": {
+          "auroc": 0.710413,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.9249
+        },
+        "CXR-102": {
+          "auroc": 0.669955,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0027,
+          "threshold": 0.7272
+        },
+        "CXR-103": {
+          "auroc": 0.744106,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.7853
+        },
+        "CXR-104": {
+          "auroc": 0.615992,
+          "draft_rate_normal": 0.0004,
+          "draft_rate_pneumonia": 0.0006,
+          "threshold": 0.9307
+        },
+        "CXR-111": {
+          "auroc": 0.696749,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.7272
+        },
+        "CXR-112": {
+          "auroc": 0.599303,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0015,
+          "threshold": 0.6789
+        },
+        "CXR-113": {
+          "auroc": 0.67985,
+          "draft_rate_normal": 0.1523,
+          "draft_rate_pneumonia": 0.3738,
+          "threshold": 0.6161
+        },
+        "CXR-114": {
+          "auroc": 0.713459,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0009,
+          "threshold": 0.6871
+        },
+        "CXR-115": {
+          "auroc": 0.689504,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.55
+        },
+        "CXR-200": {
+          "auroc": 0.663873,
+          "draft_rate_normal": 0.0022,
+          "draft_rate_pneumonia": 0.0434,
+          "threshold": 0.6127
+        },
+        "CXR-201": {
+          "auroc": 0.532738,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.6527
+        },
+        "CXR-202": {
+          "auroc": 0.674924,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.6198
+        },
+        "CXR-406": {
+          "auroc": 0.587655,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0012,
+          "threshold": 0.849
+        },
+        "CXR-500": {
+          "auroc": 0.544276,
+          "draft_rate_normal": 0.0109,
+          "draft_rate_pneumonia": 0.0287,
+          "threshold": 0.6631
+        },
+        "CXR-602": {
+          "auroc": 0.59811,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.6547
+        }
+      },
+      "reference_raw_pneumonia_output_auroc": 0.664429,
+      "external_calibration_check": {
+        "source": "report-calib.json",
+        "by_rate": {
+          "0.01": {
+            "normal_with_any_draft": 0.0127,
+            "normal_mean_drafts": 0.013,
+            "pneumonia_with_any_draft": 0.1036,
+            "with_any_draft_by_kind": {
+              "normal": 0.0127,
+              "bacterial": 0.0794,
+              "viral": 0.11,
+              "mixed": 0.1361,
+              "mycoplasma": 0.073
+            }
+          },
+          "0.02": {
+            "normal_with_any_draft": 0.0183,
+            "normal_mean_drafts": 0.019,
+            "pneumonia_with_any_draft": 0.1203,
+            "with_any_draft_by_kind": {
+              "normal": 0.0183,
+              "bacterial": 0.0875,
+              "viral": 0.1167,
+              "mixed": 0.1564,
+              "mycoplasma": 0.1028
+            }
+          },
+          "0.05": {
+            "normal_with_any_draft": 0.0332,
+            "normal_mean_drafts": 0.034,
+            "pneumonia_with_any_draft": 0.1694,
+            "with_any_draft_by_kind": {
+              "normal": 0.0332,
+              "bacterial": 0.1282,
+              "viral": 0.15,
+              "mixed": 0.2195,
+              "mycoplasma": 0.1443
+            }
+          }
+        }
+      },
+      "seconds": 1333.5
+    }
+  },
+  "source": "Zenodo 13744272 (CC BY 4.0), «Pediatric Pneumonia.rar», md5 1662b0061221966ab07824ef7a365476; 5632 PNG 893×893 RGB"
+}

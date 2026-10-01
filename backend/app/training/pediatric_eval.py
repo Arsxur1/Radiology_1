@@ -17,12 +17,16 @@
 
 from __future__ import annotations
 
+import math
 import random
 from pathlib import Path
 
 from app.training.metrics import auroc
 
-CLASSES = ("normal", "bacterial", "viral")
+CLASSES = ("normal", "bacterial", "viral", "mixed", "mycoplasma", "pneumonia")  # «pneumonia» — подтип неизвестен
+# Папка-класс набора HWCMC (Hainan, Zenodo 13744272): «Pediatric Pneumonia/<класс>/<класс>_N.png».
+_FOLDER_KIND = {"normal": "normal", "bacteria": "bacterial", "bacterial": "bacterial", "virus": "viral",
+                "viral": "viral", "mixed": "mixed", "mycoplasma": "mycoplasma"}
 CITATION = ("Kermany D., Zhang K., Goldbaum M. Labeled Optical Coherence Tomography (OCT) and Chest X-Ray "
             "Images for Classification. Mendeley Data, v2, 2018. doi:10.17632/rscbjbr9sj.2. CC BY 4.0.")
 
@@ -40,16 +44,33 @@ def label_of(path: str | Path) -> tuple[str, int] | None:
         if "virus" in name:
             return "viral", 1
         return "pneumonia", 1
+    kind = _FOLDER_KIND.get(folder.lower())
+    if kind:
+        return kind, int(kind != "normal")
     return None
 
 
 def find_images(root: str | Path, splits: tuple[str, ...]) -> list[tuple[Path, str, int]]:
     """Снимки выбранных частей набора (train/val/test) с метками; порядок детерминирован."""
     out = []
-    for split in splits:
-        for p in sorted(Path(root).rglob(f"{split}/*/*")):
+    for split in splits or ("",):            # без частей (HWCMC) — весь набор
+        for p in sorted(Path(root).rglob(f"{split}/*/*" if split else "*/*")):
             if p.suffix.lower() in (".jpeg", ".jpg", ".png") and (lab := label_of(p)):
                 out.append((p, *lab))
+    return out
+
+
+def npz_images(path: str | Path, splits: tuple[str, ...]):
+    """Тот же набор в версии MedMNIST+ (Zenodo 10519652, CC BY 4.0): массивы 224×224,
+    метки 0 — норма, 1 — пневмония (подтип не сохранён). Возвращает (массив, класс, y)."""
+    import numpy as np
+
+    data = np.load(path)
+    out = []
+    for split in splits:
+        for img, lab in zip(data[f"{split}_images"], data[f"{split}_labels"].ravel(), strict=True):
+            y = int(lab)
+            out.append((img.astype("float32"), "pneumonia" if y else "normal", y))
     return out
 
 
@@ -104,6 +125,29 @@ def summarize(records: list[dict], thresholds: dict[str, float], *, bootstrap: i
         "pneumonia_with_any_draft": _rate([bool(drafted[i]) for i in pneu]),
         "bacterial_with_any_draft": _rate([bool(drafted[i]) for i in group("bacterial")]),
         "viral_with_any_draft": _rate([bool(drafted[i]) for i in group("viral")]),
+        "with_any_draft_by_kind": {k: _rate([bool(drafted[i]) for i in group(k)]) for k in CLASSES if group(k)},
         "per_code": per_code,
         "reference_raw_pneumonia_output_auroc": auroc(y, raw) if all(v is not None for v in raw) else None,
     }
+
+
+def normal_floor_thresholds(records: list[dict], thresholds: dict[str, float], max_rate: float) -> dict[str, float]:
+    """Пороги, при которых каждый код рисует черновик не более чем у max_rate здоровых детей.
+
+    Внешний набор не знает истины по находкам (только «норма/пневмония»), поэтому честно
+    можно лишь ограничить ложные черновики у здоровых: порог кода поднимается до квантиля
+    (1 − max_rate) его оценок на снимках нормы и **никогда не опускается** ниже исходного.
+    Подбирать на одной части набора (train), проверять — на другой (test).
+    """
+    normals = [r for r in records if r["y"] == 0]
+    out = {}
+    for code, cur in thresholds.items():
+        scores = sorted(r["probs"].get(code, 0.0) for r in normals)
+        if not scores:
+            out[code] = cur
+            continue
+        k = min(len(scores) - 1, int((1 - max_rate) * len(scores)))
+        # Строго выше k-й оценки, с округлением вверх до 4 знаков (округление вниз пропустило бы лишних).
+        above = math.floor(scores[k] * 10_000) / 10_000 + 0.0001
+        out[code] = round(max(cur, above), 4)
+    return out

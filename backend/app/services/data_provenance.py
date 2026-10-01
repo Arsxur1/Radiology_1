@@ -66,6 +66,9 @@ SOURCES: dict[str, DataSource] = {s.key: s for s in (
                "открытый, без регистрации", "CC BY 4.0", "yes",
                "5856 снимков детей 1–5 лет; метки — диагнозы «пневмония/норма» (SR-1: не выдавать как "
                "диагноз); пригоден для педиатрической адаптации и проверки «норма/не норма»."),
+    DataSource("hwcmc", "HWCMC (Hainan Women and Children's Medical Center)",
+               "https://doi.org/10.5281/zenodo.13744272", "открытый (Zenodo)", "CC BY 4.0", "yes",
+               "5632 снимка детей 0–14 лет; метки — типы пневмонии и норма (диагнозы, SR-1)."),
     DataSource("pediatric-ct-seg", "Pediatric-CT-SEG (TCIA)", "https://doi.org/10.7937/TCIA.X0H0-1706",
                "открытый (TCIA / IDC)", "лицензия коллекции TCIA не проверена (сайт недоступен из среды "
                "разработки)", "unknown",
@@ -76,7 +79,8 @@ SOURCES: dict[str, DataSource] = {s.key: s for s in (
                "трактуют по-разному", "unknown", "Стартовые веса train.py (--pretrained imagenet)."),
     DataSource("totalsegmentator", "TotalSegmentator: задачи total / total_mr",
                "https://github.com/wasserth/TotalSegmentator", "открытый",
-               "Apache-2.0 («openly available for any usage»), включая --fast", "yes",
+               "веса — Apache-2.0 («openly available for any usage»), включая --fast; обучающие наборы "
+               "на Zenodo (CT v3, MRI v3) — CC BY 4.0", "yes",
                "Прочие задачи (heartchambers_highres, appendicular_bones, tissue_types…) — по лицензии."),
     DataSource("ncmc", "Собственные данные площадки (NCMC)", "", "внутренний контур клиники",
                "договор с клиникой и правовое основание обработки", "yes",
