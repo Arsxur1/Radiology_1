@@ -30,6 +30,8 @@ class SeriesOut(BaseModel):
     slice_thickness_mm: float | None
     lossy_compressed: bool
     is_3d_capable: bool
+    # Возможен текст с данными пациента в пикселях: врач видит предупреждение, в обучение не идёт.
+    burned_in_risk: bool = False
 
 
 class StudyOut(BaseModel):
@@ -166,6 +168,7 @@ def _to_study_out(study: Study, ai_pending: int = 0, report_status: str = "none"
                 slice_thickness_mm=s.slice_thickness_mm,
                 lossy_compressed=s.lossy_compressed,
                 is_3d_capable=s.is_3d_capable(),
+                burned_in_risk=bool(s.burned_in_risk),
             )
             for s in study.series
         ],

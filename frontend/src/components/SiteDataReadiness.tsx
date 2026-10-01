@@ -58,6 +58,7 @@ export function SiteDataReadiness({ days }: { days: number }) {
                 <th>BodyPartExamined</th>
                 <th>Область определена</th>
                 <th>Кодировка угадана</th>
+                <th>Текст на снимке</th>
               </tr>
             </thead>
             <tbody>
@@ -70,6 +71,7 @@ export function SiteDataReadiness({ days }: { days: number }) {
                   <Cell v={d.body_part_share} />
                   <Cell v={d.region_share} />
                   <td>{d.charset_guessed || "—"}</td>
+                  <td>{d.burned_in_risk || "—"}</td>
                 </tr>
               ))}
             </tbody>

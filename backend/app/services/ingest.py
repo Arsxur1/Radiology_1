@@ -98,6 +98,10 @@ def persist_ingest(
         )
     ).scalar_one_or_none()
     if existing_series is not None:
+        # Один снимок серии с риском впечатанного текста помечает всю серию.
+        if series_meta.get("burned_in_risk") and not existing_series.burned_in_risk:
+            existing_series.burned_in_risk = True
+            db.flush()
         return IngestOutcome(
             study_id=existing_series.study_id,
             series_id=existing_series.id,
@@ -147,6 +151,7 @@ def persist_ingest(
         voxel_spacing=series_meta.get("voxel_spacing"),
         transfer_syntax=series_meta.get("transfer_syntax"),
         lossy_compressed=series_meta.get("lossy_compressed", False),
+        burned_in_risk=bool(series_meta.get("burned_in_risk")),
         contrast_agent=series_meta.get("contrast_agent"),
         orthanc_series_id=series_meta.get("orthanc_series_id"),
         object_prefix=series_meta.get("object_prefix"),

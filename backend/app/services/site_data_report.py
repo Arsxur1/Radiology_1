@@ -19,7 +19,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.imaging import Study
+from app.models.imaging import Series, Study
 from app.services.shadow_eval import AGE_GROUPS, age_group
 from app.services.structure_catalog import region_for_study
 
@@ -41,10 +41,15 @@ def build_site_data_report(db: Session, *, days: int = 90, now: datetime | None 
     now = now or datetime.now(UTC)
     since = (now - timedelta(days=days)).replace(tzinfo=None)
     rows = db.execute(
-        select(Study.modality, Study.manufacturer, Study.manufacturer_model, Study.body_part,
+        select(Study.id, Study.modality, Study.manufacturer, Study.manufacturer_model, Study.body_part,
                Study.protocol, Study.description, Study.patient_age_years, Study.charset_guessed)
         .where(Study.created_at >= since)
     ).all()
+    # Исследования, где возможен текст с данными пациента в пикселях (BurnedInAnnotation / вторичная копия).
+    burned = set(db.execute(
+        select(Series.study_id).join(Study, Series.study_id == Study.id)
+        .where(Study.created_at >= since, Series.burned_in_risk.is_(True))
+    ).scalars())
 
     devices: dict[str, Counter] = defaultdict(Counter)
     modalities: Counter = Counter()
@@ -52,11 +57,13 @@ def build_site_data_report(db: Session, *, days: int = 90, now: datetime | None 
     ages: Counter = Counter()
     charsets: Counter = Counter()
     unknown_desc: Counter = Counter()
-    for modality, manuf, model, body_part, protocol, description, age, charset in rows:
+    for study_id, modality, manuf, model, body_part, protocol, description, age, charset in rows:
         key = " · ".join(x for x in ((manuf or "").strip() or "аппарат не указан", (model or "").strip()) if x)
         d = devices[key]
         d["studies"] += 1
         d[f"modality:{modality}"] += 1
+        if study_id in burned:
+            d["burned_in_risk"] += 1
         modalities[modality] += 1
         if body_part:
             d["body_part"] += 1
@@ -87,6 +94,7 @@ def build_site_data_report(db: Session, *, days: int = 90, now: datetime | None 
             "age_share": _pct(d["age"], n),
             "region_share": _pct(d["region"], n),
             "charset_guessed": d["charset_guessed"],
+            "burned_in_risk": d["burned_in_risk"],
         }
         per_device.append(item)
         if item["age_share"] < WARN_BELOW:
@@ -104,6 +112,10 @@ def build_site_data_report(db: Session, *, days: int = 90, now: datetime | None 
                 issues.append(f"{head}; по описанию область не определена в {1 - item['region_share']:.0%}. "
                               "Проверьте список нераспознанных описаний: если там есть грудная клетка, "
                               "живот или голова — сообщите нам; лучше включить передачу тега на аппарате.")
+        if d["burned_in_risk"]:
+            issues.append(f"{key}: в {d['burned_in_risk']} исследованиях возможен текст с данными пациента в самом "
+                          "изображении (BurnedInAnnotation или копия экрана) — в обучение они не идут; проверить, "
+                          "не впечатывает ли аппарат ФИО в снимок, и выключить это в настройках.")
         if d["charset_guessed"]:
             issues.append(f"{key}: в {d['charset_guessed']} исследованиях кодировка текста не указана "
                           "(угадана при приёме) — настроить SpecificCharacterSet = ISO_IR 192 на аппарате.")

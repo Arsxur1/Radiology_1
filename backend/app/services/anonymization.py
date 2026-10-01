@@ -191,3 +191,15 @@ def anonymize_dataset(ds: Dataset) -> tuple[Dataset, DeidResult]:
         del clean.PatientBirthDate
 
     return clean, plan
+
+
+# Вторичные копии экрана (Secondary Capture и семейство 1.2.840.10008.5.1.4.1.1.7.x): часто
+# содержат надписи с данными пациента прямо в изображении.
+SECONDARY_CAPTURE_PREFIX = "1.2.840.10008.5.1.4.1.1.7"
+
+
+def burned_in_risk(ds: Dataset) -> bool:
+    """Возможен текст с данными пациента в пикселях (обезличивание тегов его не уберёт)."""
+    flag = str(getattr(ds, "BurnedInAnnotation", "") or "").strip().upper()
+    sop = str(getattr(ds, "SOPClassUID", "") or "")
+    return flag == "YES" or sop.startswith(SECONDARY_CAPTURE_PREFIX)

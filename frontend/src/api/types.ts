@@ -11,6 +11,8 @@ export interface SeriesOut {
   slice_thickness_mm: number | null;
   lossy_compressed: boolean;
   is_3d_capable: boolean;
+  /** Возможен текст с данными пациента в пикселях: в обучение не идёт. */
+  burned_in_risk?: boolean;
 }
 
 export interface StudyOut {
@@ -347,6 +349,7 @@ export interface SiteDataDevice {
   age_share: number | null;
   region_share: number | null;
   charset_guessed: number;
+  burned_in_risk?: number;
 }
 
 export interface SiteDataReport {

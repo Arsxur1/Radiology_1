@@ -75,6 +75,10 @@ class Series(UUIDMixin, TimestampMixin, Base):
     voxel_spacing: Mapped[dict | None] = mapped_column(JSONB, nullable=True)  # [x,y,z] мм
     transfer_syntax: Mapped[str | None] = mapped_column(String(64), nullable=True)
     lossy_compressed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Возможен текст, впечатанный в пиксели (BurnedInAnnotation=YES или вторичная копия экрана —
+    # Secondary Capture): ФИО на снимке обезличивание тегов не убирает. Такие серии видны врачу
+    # с предупреждением и не идут в обучение и внешние отчёты (SR-9).
+    burned_in_risk: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     contrast_agent: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     # Ссылки на объекты (пиксели — не в БД).

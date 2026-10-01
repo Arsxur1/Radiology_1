@@ -106,6 +106,11 @@ export function StudyReview() {
           <h3>
             Серия {se.modality} {se.description ? `· ${se.description}` : ""}{" "}
             {!se.is_3d_capable && <span className="muted">(не пригодна для 3D)</span>}
+            {se.burned_in_risk && (
+              <span className="badge badge-model" style={{ marginLeft: 8 }} title="BurnedInAnnotation=YES или копия экрана: обезличивание тегов не убирает надписи в изображении">
+                возможен текст с данными пациента на снимке — не идёт в обучение
+              </span>
+            )}
           </h3>
           {(findings[se.id] ?? []).length === 0 ? (
             <p className="muted">

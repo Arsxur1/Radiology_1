@@ -8,7 +8,7 @@ import logging
 from app.core.config import get_settings
 from app.db.session import IdMapSessionLocal, SessionLocal
 from app.services import ingest, storage
-from app.services.anonymization import anonymize_dataset
+from app.services.anonymization import anonymize_dataset, burned_in_risk
 from app.services.dicom_charset import normalize_charset
 from app.services.orthanc import clean_client, raw_client
 from app.workers.celery_app import celery_app
@@ -100,6 +100,7 @@ def process_raw_instance(self, raw_instance_id: str) -> dict:
         study_meta = extract_study_meta(tags)
         study_meta["charset_guessed"] = charset_guessed
         series_meta = extract_series_meta(tags)
+        series_meta["burned_in_risk"] = burned_in_risk(ds)
         series_meta["object_prefix"] = f"{plan.pseudonym_study_uid}/{clean_ds.SeriesInstanceUID}"
 
         db = SessionLocal()

@@ -144,6 +144,8 @@ def site_manifest(
         select(Series.id, Series.study_id, Series.modality, Series.series_instance_uid, Series.object_prefix,
                Study.patient_age_years, Study.patient_id)
         .join(Study, Series.study_id == Study.id).where(Series.modality.in_(modalities))
+        # Возможен текст с данными пациента в пикселях — в обучение не идёт (SR-9).
+        .where(Series.burned_in_risk.is_(False))
     ).all()
     records: list[dict] = []
     report = {"records": 0, "skipped_unlabeled": 0, "skipped_no_age": 0,
