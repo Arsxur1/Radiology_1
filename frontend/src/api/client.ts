@@ -15,6 +15,7 @@ import type {
   OperatingMode,
   PatientOut,
   PilotDashboard,
+  SiteDataReport,
   PromotionGateResult,
   RegistrationOut,
   RegistrationStage,
@@ -109,6 +110,7 @@ export const api = {
   systemStatus: () => request<SystemStatusOut>("/system/status"),
 
   pilotDashboard: (weeks = 12) => request<PilotDashboard>(`/pilot/dashboard?weeks=${weeks}`),
+  siteData: (days = 90) => request<SiteDataReport>(`/pilot/site-data?days=${days}`),
 
   seriesPreviewUrl: (seriesId: string) => requestBlobUrl(`/studies/series/${seriesId}/preview`),
   findingHeatmapUrl: (findingId: string) => requestBlobUrl(`/findings/${findingId}/heatmap`),

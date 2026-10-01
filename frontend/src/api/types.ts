@@ -322,3 +322,28 @@ export interface SystemStatusOut {
   checks: SystemCheck[];
   checked_at: number;
 }
+
+export interface SiteDataDevice {
+  device: string;
+  studies: number;
+  modalities: string[];
+  body_part_share: number | null;
+  age_share: number | null;
+  region_share: number | null;
+  charset_guessed: number;
+}
+
+export interface SiteDataReport {
+  days: number;
+  studies: number;
+  modalities: Record<string, number>;
+  age_groups: Record<string, number>;
+  region_source: Record<string, number>;
+  charset_guessed: Record<string, number>;
+  per_device: SiteDataDevice[];
+  unrecognized_descriptions: { text: string; studies: number }[];
+  rare_unrecognized_studies: number;
+  min_description_count: number;
+  issues: string[];
+  ready: boolean;
+}

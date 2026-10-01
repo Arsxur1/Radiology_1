@@ -128,6 +128,7 @@ def persist_ingest(
             protocol=study_meta.get("protocol"),
             body_part=study_meta.get("body_part"),
             patient_age_years=study_meta.get("patient_age_years"),
+            charset_guessed=study_meta.get("charset_guessed"),
             orthanc_study_id=study_meta.get("orthanc_study_id"),
         )
         db.add(study)

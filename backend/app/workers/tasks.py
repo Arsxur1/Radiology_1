@@ -83,7 +83,7 @@ def process_raw_instance(self, raw_instance_id: str) -> dict:
         raw_bytes = raw.get_instance_file(raw_instance_id)
         ds = pydicom.dcmread(io.BytesIO(raw_bytes))
         # До обезличивания: ФИО для идентифицирующего контура должно быть прочитано верно.
-        normalize_charset(ds, settings.dicom_fallback_charset)
+        charset_guessed = normalize_charset(ds, settings.dicom_fallback_charset)
 
         clean_ds, plan = anonymize_dataset(ds)
 
@@ -98,6 +98,7 @@ def process_raw_instance(self, raw_instance_id: str) -> dict:
 
         tags = {elem.keyword: str(elem.value) for elem in clean_ds if elem.keyword}
         study_meta = extract_study_meta(tags)
+        study_meta["charset_guessed"] = charset_guessed
         series_meta = extract_series_meta(tags)
         series_meta["object_prefix"] = f"{plan.pseudonym_study_uid}/{clean_ds.SeriesInstanceUID}"
 

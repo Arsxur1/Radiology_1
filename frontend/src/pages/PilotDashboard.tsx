@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
 import type { PilotDashboard as Dashboard } from "../api/types";
 import { WeeklyColumns } from "../components/charts/WeeklyColumns";
+import { SiteDataReadiness } from "../components/SiteDataReadiness";
 
 const pct = (v: number | null) =>
   v === null ? "—" : `${(v * 100).toFixed(1)}%`;
@@ -254,6 +255,8 @@ export function PilotDashboard() {
             моделей (SR-7).
           </div>
         </div>
+
+        <SiteDataReadiness days={weeks * 7} />
       </div>
     </div>
   );

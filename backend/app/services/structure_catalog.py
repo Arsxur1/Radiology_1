@@ -70,9 +70,20 @@ _REGION_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("грудн", "CHEST"),
     ("огк", "CHEST"),          # «рентгенография ОГК» — типичное описание в РУз/СНГ
     ("lung", "CHEST"),
+    ("легк", "CHEST"),         # «рентгенография лёгких»
+    ("лёгк", "CHEST"),
+    # Узбекский (латиница — с ' и ‘, кириллица): «ko'krak qafasi», «o'pka», «qorin bo'shlig'i».
+    ("ko'krak", "CHEST"),
+    ("ko‘krak", "CHEST"),
+    ("кўкрак", "CHEST"),
+    ("o'pka", "CHEST"),
+    ("o‘pka", "CHEST"),
+    ("ўпка", "CHEST"),
     ("abdom", "ABDOMEN"),
     ("брюш", "ABDOMEN"),
     ("живот", "ABDOMEN"),
+    ("qorin", "ABDOMEN"),
+    ("қорин", "ABDOMEN"),
     ("brain", "BRAIN"),
     ("head", "HEAD"),
     ("мозг", "BRAIN"),

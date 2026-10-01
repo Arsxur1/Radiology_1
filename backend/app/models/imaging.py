@@ -43,6 +43,10 @@ class Study(UUIDMixin, TimestampMixin, Base):
     # (SR-7): взрослые/дети валидируются раздельно. Дата рождения при этом удаляется.
     patient_age_years: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Кодировка текста, угаданная при приёме (аппарат не указал SpecificCharacterSet):
+    # «utf-8», «cp1251»… None — указана верно или текст ASCII. Для отчёта о данных площадки.
+    charset_guessed: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     # Ссылка на исследование в чистом Orthanc.
     orthanc_study_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
 

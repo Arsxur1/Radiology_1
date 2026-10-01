@@ -33,6 +33,16 @@ def test_region_from_protocol_ru():
     assert region_from_protocol("КТ грудной клетки") == "CHEST"
     assert region_from_protocol("КТ брюшной полости") == "ABDOMEN"
     assert region_from_protocol("МРТ головного мозга") == "BRAIN"
+    assert region_from_protocol("Рентгенография легких") == "CHEST"
+    assert region_from_protocol(None, "Обзорная рентгенограмма лёгких") == "CHEST"
+
+
+def test_region_from_protocol_uz():
+    assert region_from_protocol("Ko'krak qafasi rentgenografiyasi") == "CHEST"
+    assert region_from_protocol("Ko‘krak qafasi") == "CHEST"
+    assert region_from_protocol("Кўкрак қафаси рентгени") == "CHEST"
+    assert region_from_protocol(None, "O'pka KT") == "CHEST"
+    assert region_from_protocol("Qorin bo'shlig'i KT") == "ABDOMEN"
 
 
 def test_region_from_description_fallback():
