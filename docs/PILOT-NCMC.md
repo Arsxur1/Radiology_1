@@ -88,8 +88,12 @@
 ## 2. Первая модель (офлайн, на отдельном GPU-сервере; см. `TRAINING.md`)
 
 - [ ] **ИТ** Обучающий сервер с GPU ≥ 24 ГБ, `MEDVIZ_CONTOUR=training`.
-- [ ] **Р/Мы** Доступ PhysioNet (CITI + DUA) → скачать VinDr-PCXR (+ MIMIC-CXR-JPG, VinDr-CXR).
-- [ ] **Юрист** Лицензии датасетов для коммерческого медизделия.
+- [ ] **Р/Мы** PhysioNet: VinDr-PCXR — только аккаунт + DUA (без CITI); MIMIC-CXR-JPG и VinDr-CXR —
+      CITI + DUA. Все три — **только для исследований**: теневая оценка и публикации, не продукт
+      (`ISTOCHNIKI-I-PRAVO.md`).
+- [ ] **Юрист** Подтвердить выводы `ISTOCHNIKI-I-PRAVO.md`: лицензии датасетов и весов для
+      коммерческого медизделия; лицензия Pediatric-CT-SEG (TCIA); постановление КМ № 738 по lex.uz;
+      маркировка ИИ по ЗРУ-1115 (реализована в заключении и DICOM SR).
 - [ ] **Мы** `manifest` → прислать нам **только** `*.report.json`.
 - [ ] **Мы** `freeze` → `train --population pediatric` → `evaluate`.
 - [ ] **ИТ** Скопировать `model.pt` в `models/<weights_hash>.pt` на сервере платформы.

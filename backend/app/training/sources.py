@@ -37,15 +37,15 @@ class DatasetSpec:
 DATASETS: dict[str, DatasetSpec] = {
     "mimic-cxr-jpg": DatasetSpec(
         "mimic-cxr-jpg", "MIMIC-CXR-JPG", ADULT,
-        "PhysioNet Credentialed Health Data License; личный доступ + DUA",
+        "PhysioNet Credentialed Health Data License 1.5.0: CITI + DUA; только научные исследования",
     ),
     "vindr-cxr": DatasetSpec(
         "vindr-cxr", "VinDr-CXR", ADULT,
-        "PhysioNet credentialed; личный доступ + DUA",
+        "PhysioNet Credentialed Health Data License 1.5.0: CITI + DUA; только научные исследования",
     ),
     "vindr-pcxr": DatasetSpec(
         "vindr-pcxr", "VinDr-PCXR", PEDIATRIC,
-        "PhysioNet credentialed; личный доступ + DUA",
+        "PhysioNet Restricted Health Data License 1.5.0: регистрация + DUA (без CITI); только научные исследования",
     ),
 }
 

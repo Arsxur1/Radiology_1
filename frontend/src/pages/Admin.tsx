@@ -299,6 +299,22 @@ function EvidenceView({ gate }: { gate: PromotionGateResult }) {
             <td>Аппараты и возрастные группы</td>
             <td>{e.no_regression_on_new_devices ? "без деградации" : "есть деградация"}</td>
           </tr>
+          {e.data_provenance && (
+            <tr>
+              <td>Обучающие данные</td>
+              <td>
+                {e.data_provenance.training_data.join(", ") || "не указаны"} —{" "}
+                {
+                  {
+                    yes: "коммерческое применение допустимо",
+                    no: "только для исследований: в ASSIST нельзя",
+                    unknown: "права не подтверждены — к юристу",
+                  }[e.data_provenance.commercial]
+                }
+                <span className="muted"> (лицензии проверены {e.data_provenance.checked})</span>
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
       {e.notes.map((n, i) => (

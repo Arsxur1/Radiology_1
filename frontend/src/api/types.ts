@@ -153,6 +153,14 @@ export interface PromotionEvidence {
   slice_problems: string[];
   notes: string[];
   active_model: string | null;
+  /** Происхождение обучающих данных и право на коммерческое применение. */
+  data_provenance?: {
+    training_data: string[];
+    commercial: "yes" | "no" | "unknown";
+    research_only: string[];
+    unverified: string[];
+    checked: string;
+  };
 }
 
 export interface PromotionGateResult {

@@ -89,4 +89,5 @@ def xrv_card(
 
 def registration_from_card(card: dict) -> dict:
     keys = ("name", "semver", "weights_hash", "applicability", "task", "operating_points", "adapter")
+    # Происхождение данных xrv сервер определяет по весам (services/data_provenance).
     return {k: card[k] for k in keys}

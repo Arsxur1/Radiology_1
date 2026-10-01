@@ -24,36 +24,67 @@ class ReportExportInput:
     sentence_map: dict           # индекс → finding_id
     finalized_by: str | None
     sentences: list[str]         # предложения в порядке sentence_map
+    # Маркировка участия ИИ (закон РУз ЗРУ-1115 от 21.01.2026: обязательная маркировка
+    # информации, созданной с использованием ИИ). Индекс пункта → "ai" | "physician".
+    item_origin: dict | None = None
+    ai_models: tuple[str, ...] = ()   # «имя версия» моделей, чьи находки вошли в заключение
 
 
 _HEADINGS = {
-    "ru": {"title": "Заключение (черновик)", "study": "Исследование",
-           "by": "Подтвердил", "disclaimer": "Сформировано из подтверждённых врачом находок."},
-    "uz": {"title": "Xulosa (qoralama)", "study": "Tekshiruv",
-           "by": "Tasdiqladi", "disclaimer": "Shifokor tasdiqlagan topilmalardan shakllantirilgan."},
-    "en": {"title": "Report (draft)", "study": "Study",
-           "by": "Confirmed by", "disclaimer": "Assembled from physician-confirmed findings."},
+    "ru": {"title": "Заключение (черновик)", "final": "Заключение", "study": "Исследование",
+           "by": "Подтвердил", "disclaimer": "Сформировано из подтверждённых врачом находок.",
+           "ai": "ИИ → подтверждено врачом", "physician": "врач",
+           "ai_label": "При подготовке заключения использована система искусственного интеллекта "
+                       "medviz ({models}). Каждая находка ИИ проверена и подтверждена врачом."},
+    # Узбекский — до проверки носителем языка (GLOSSARY-UZ.md).
+    "uz": {"title": "Xulosa (qoralama)", "final": "Xulosa", "study": "Tekshiruv",
+           "by": "Tasdiqladi", "disclaimer": "Shifokor tasdiqlagan topilmalardan shakllantirilgan.",
+           "ai": "SI → shifokor tasdiqlagan", "physician": "shifokor",
+           "ai_label": "Xulosani tayyorlashda medviz sun'iy intellekt tizimi ({models}) ishlatilgan. "
+                       "Har bir SI topilmasi shifokor tomonidan tekshirilib tasdiqlangan."},
+    "en": {"title": "Report (draft)", "final": "Report", "study": "Study",
+           "by": "Confirmed by", "disclaimer": "Assembled from physician-confirmed findings.",
+           "ai": "AI → physician-confirmed", "physician": "physician",
+           "ai_label": "An artificial intelligence system (medviz: {models}) was used to prepare this report. "
+                       "Every AI finding was reviewed and confirmed by a physician."},
 }
+
+
+def ai_label(data: ReportExportInput) -> str | None:
+    """Текст маркировки участия ИИ или None, если находок ИИ в заключении нет."""
+    if not data.ai_models:
+        return None
+    h = _HEADINGS.get(data.language, _HEADINGS["ru"])
+    return h["ai_label"].format(models=", ".join(data.ai_models))
 
 
 def render_html(data: ReportExportInput) -> str:
     """Самодостаточный HTML для печати в PDF. Детерминированный, без внешних ресурсов."""
     h = _HEADINGS.get(data.language, _HEADINGS["ru"])
+    origin = data.item_origin or {}
+
+    def mark(i: int) -> str:
+        o = origin.get(str(i))
+        return f' <span class="note">({h[o]})</span>' if o in ("ai", "physician") else ""
+
     items = "".join(
         f'<li data-finding-id="{html.escape(data.sentence_map.get(str(i), ""))}">'
-        f"{html.escape(s)}</li>"
+        f"{html.escape(s)}{mark(i)}</li>"
         for i, s in enumerate(data.sentences)
     )
     by = f"<p>{h['by']}: {html.escape(data.finalized_by)}</p>" if data.finalized_by else ""
+    label = ai_label(data)
+    label_html = f'<p class="ai"><strong>{html.escape(label)}</strong></p>' if label else ""
     return (
         "<!doctype html><html lang=\"" + html.escape(data.language) + "\"><head>"
         "<meta charset=\"utf-8\"><style>"
         "body{font-family:sans-serif;margin:2rem;color:#111}"
         "h1{font-size:1.3rem}li{margin:.3rem 0}.note{color:#666;font-size:.85rem}"
+        ".ai{border:1px solid #999;padding:.4rem .6rem;font-size:.9rem}"
         "</style></head><body>"
-        f"<h1>{h['title']}</h1>"
+        f"<h1>{h['final'] if data.finalized_by else h['title']}</h1>"
         f"<p>{h['study']}: {html.escape(data.study_uid)}</p>"
-        f"<ol>{items}</ol>{by}"
+        f"{label_html}<ol>{items}</ol>{by}"
         f"<p class=\"note\">{h['disclaimer']}</p>"
         "</body></html>"
     )
@@ -159,6 +190,26 @@ def build_dicom_sr(data: ReportExportInput, identity: SrIdentity, *, report_id: 
         if finding_id:
             item.ObservationUID = "2.25." + str(int(finding_id.replace("-", ""), 16))
         items.append(item)
+    # Маркировка участия ИИ (ЗРУ-1115): стандартные коды DICOM для алгоритма (CAD) и
+    # текстовое пояснение — PACS и любой просмотрщик SR покажут, что работал ИИ.
+    label = ai_label(data)
+    if label:
+        for model in data.ai_models:
+            name, _, version = model.rpartition(" ")
+            for code, meaning, value in (("111001", "Algorithm Name", f"medviz: {name or model}"),
+                                         ("111003", "Algorithm Version", version or "—")):
+                item = Dataset()
+                item.RelationshipType = "CONTAINS"
+                item.ValueType = "TEXT"
+                item.ConceptNameCodeSequence = Sequence([_code(code, "DCM", meaning)])
+                item.TextValue = value
+                items.append(item)
+        note = Dataset()
+        note.RelationshipType = "CONTAINS"
+        note.ValueType = "TEXT"
+        note.ConceptNameCodeSequence = Sequence([_code("121106", "DCM", "Comment")])
+        note.TextValue = label
+        items.append(note)
     ds.ContentSequence = Sequence(items)
     return ds
 

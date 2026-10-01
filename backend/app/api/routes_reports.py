@@ -136,14 +136,7 @@ def export_html(
     audit.record_access(db, user, AuditAction.EXPORT, entity_type="report", entity_id=report.id,
                         details={"what": "выгрузка заключения (HTML)", "study_id": str(report.study_id)})
     study = db.get(Study, report.study_id)
-    data = ReportExportInput(
-        study_uid=study.study_instance_uid if study else str(report.study_id),
-        language=report.language,
-        draft_text=report.draft_text or "",
-        sentence_map=report.sentence_map or {},
-        finalized_by=report.finalized_by,
-        sentences=_split_sentences(report.draft_text or ""),
-    )
+    data = _export_input(db, report, study.study_instance_uid if study else str(report.study_id))
     return HTMLResponse(content=report_export.render_html(data))
 
 
@@ -170,14 +163,7 @@ def sr_content(
     audit.record_access(db, user, AuditAction.EXPORT, entity_type="report", entity_id=report.id,
                         details={"what": "выгрузка заключения (DICOM SR)", "study_id": str(report.study_id)})
     study = db.get(Study, report.study_id)
-    data = ReportExportInput(
-        study_uid=study.study_instance_uid if study else str(report.study_id),
-        language=report.language,
-        draft_text=report.draft_text or "",
-        sentence_map=report.sentence_map or {},
-        finalized_by=report.finalized_by,
-        sentences=_split_sentences(report.draft_text or ""),
-    )
+    data = _export_input(db, report, study.study_instance_uid if study else str(report.study_id))
     root = build_sr_content(data)
     return {
         "value_type": root.value_type,
@@ -186,6 +172,34 @@ def sr_content(
         ],
         "traceability": sr_traceability_map(root),
     }
+
+
+def _export_input(db: Session, report: Report, study_uid: str) -> ReportExportInput:
+    """Данные выгрузки с маркировкой: какой пункт из находки ИИ, какой — от врача (ЗРУ-1115)."""
+    from app.models.ml import Finding, FindingSource
+
+    smap = report.sentence_map or {}
+    origin: dict[str, str] = {}
+    models: set[str] = set()
+    for idx, fid in smap.items():
+        try:
+            f = db.get(Finding, uuid.UUID(str(fid)))
+        except ValueError:
+            f = None
+        if f is None:
+            continue
+        if f.source == FindingSource.MODEL and f.inference_result is not None:
+            origin[str(idx)] = "ai"
+            mv = f.inference_result.model_version
+            models.add(f"{mv.name} {mv.semver}")
+        else:
+            origin[str(idx)] = "physician"
+    return ReportExportInput(
+        study_uid=study_uid, language=report.language, draft_text=report.draft_text or "",
+        sentence_map=smap, finalized_by=report.finalized_by,
+        sentences=_split_sentences(report.draft_text or ""),
+        item_origin=origin, ai_models=tuple(sorted(models)),
+    )
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -229,11 +243,7 @@ def send_to_pacs(
     if row is None or not row.real_study_instance_uid or not row.real_mrn:
         raise HTTPException(status_code=409, detail="Нет исходных идентификаторов исследования — "
                             "SR не к чему привязать в PACS")
-    data = ReportExportInput(
-        study_uid=study.study_instance_uid, language=report.language, draft_text=report.draft_text or "",
-        sentence_map=report.sentence_map or {}, finalized_by=report.finalized_by,
-        sentences=_split_sentences(report.draft_text or ""),
-    )
+    data = _export_input(db, report, study.study_instance_uid)
     ds = build_dicom_sr(
         data, SrIdentity(patient_id=row.real_mrn, patient_name=row.real_name or "",
                          study_instance_uid=row.real_study_instance_uid),

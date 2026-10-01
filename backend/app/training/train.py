@@ -214,6 +214,9 @@ def train(  # pragma: no cover - нужен torch и данные на обуч�
         metrics=best, frozen_digest=frozen.digest, operating_points=ops,
     )
     card["pretrained"] = pretrained if pretrained in ("imagenet", "none") else f"file:{Path(pretrained).name}"
+    # Данные стартовых весов тоже «входят» в модель. Для своего файла весов — перечислите
+    # источники его обучения в карточке вручную (training_data) до регистрации.
+    card["training_data"] = sorted(set(card["datasets"]) | ({"imagenet"} if pretrained == "imagenet" else set()))
     if pretrained == "none":
         card["intended_use"] = "ТЕХНИЧЕСКАЯ ПРОВЕРКА КОНТУРА. Без предобучения — не регистрировать."
     (out_dir / "model_card.json").write_text(json.dumps(card, ensure_ascii=False, indent=2), "utf-8")

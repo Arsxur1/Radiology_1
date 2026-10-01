@@ -217,7 +217,9 @@ def test_card_and_registration(tmp_path):
     )
     assert card["initial_status"] == "shadow"
     reg = registration_payload(card)
-    assert set(reg) == {"name", "semver", "weights_hash", "applicability", "task", "operating_points"}
+    assert set(reg) == {"name", "semver", "weights_hash", "applicability", "task", "operating_points",
+                        "training_data"}
+    assert reg["training_data"] == card["datasets"]          # происхождение данных идёт в гейт
     assert reg["task"] == "classification" and reg["operating_points"] == {}
 
 

@@ -102,4 +102,6 @@ def registration_payload(card: dict) -> dict:
         "applicability": card["applicability"],
         "task": card.get("task", "classification"),
         "operating_points": {c: {"threshold": op["threshold"]} for c, op in card.get("operating_points", {}).items()},
+        # Происхождение данных: от него зависит право на коммерческое применение (гейт).
+        "training_data": card.get("training_data", card.get("datasets", [])),
     }

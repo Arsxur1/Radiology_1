@@ -43,6 +43,8 @@ class RegisterIn(BaseModel):
     task: str = "segmentation"
     operating_points: dict = {}
     adapter: dict = {}
+    # Ключи источников обучающих данных из карточки модели (см. services/data_provenance).
+    training_data: list[str] = []
 
 
 class PromoteIn(BaseModel):
@@ -84,6 +86,7 @@ def register_candidate(
             db, name=payload.name, semver=payload.semver, weights_hash=payload.weights_hash,
             applicability=payload.applicability, actor=user.subject,
             task=payload.task, operating_points=payload.operating_points, adapter=payload.adapter,
+            training_data=payload.training_data,
         )
     except PromotionError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e

@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.models.audit import AuditAction
 from app.models.ml import ModelStatus, ModelVersion
-from app.services import audit
+from app.services import audit, data_provenance
 
 MODEL_TASKS = ("segmentation", "classification")
 # Открытые предобученные модели TorchXRayVision, допустимые для теневой оценки.
@@ -212,6 +212,10 @@ def collect_evidence(db: Session, candidate: ModelVersion, criteria: PromotionCr
         rate = None
     problems = _slice_problems(manufacturers, "Аппарат", c) + \
         _slice_problems(report.get("per_age_group", {}), "Возрастная группа", c)
+    provenance = data_provenance.assess(candidate.adapter, (candidate.evidence or {}).get("training_data"))
+    if provenance["commercial"] == "unknown":
+        notes.append("Право на коммерческое применение не подтверждено: " + "; ".join(provenance["unverified"])
+                     + " — решение за юристом до продвижения")
     return {
         "frozen_test_cases": int(frozen.get("n") or 0),
         "frozen_test_superior": superior,
@@ -221,6 +225,7 @@ def collect_evidence(db: Session, candidate: ModelVersion, criteria: PromotionCr
         "slice_problems": problems,
         "notes": notes,
         "active_model": f"{active.name}@{active.semver}" if active else None,
+        "data_provenance": provenance,
     }
 
 
@@ -234,6 +239,10 @@ def gate_for(db: Session, candidate: ModelVersion, criteria: PromotionCriteria |
         no_regression_on_new_devices=ev["no_regression_on_new_devices"], criteria=c,
     )
     gate.reasons.extend(ev["slice_problems"])
+    licence_block = data_provenance.gate_reason(ev["data_provenance"])
+    if licence_block:
+        gate.reasons.append(licence_block)
+        gate.ok = False
     return gate, ev
 
 
@@ -248,8 +257,13 @@ def register_candidate(
     task: str = "segmentation",
     operating_points: dict | None = None,
     adapter: dict | None = None,
+    training_data: list[str] | None = None,
 ) -> ModelVersion:
-    """Зарегистрировать модель-кандидата. Всегда стартует в SHADOW (раздел 2)."""
+    """Зарегистрировать модель-кандидата. Всегда стартует в SHADOW (раздел 2).
+
+    training_data — ключи источников обучающих данных из карточки модели (для своих весов;
+    у открытых моделей xrv/TotalSegmentator происхождение известно по адаптеру).
+    """
     adapter = adapter or {}
     if adapter:
         kind = adapter.get("type")
@@ -275,6 +289,7 @@ def register_candidate(
         applicability=applicability,
         status=ModelStatus.SHADOW,
         installed_at=datetime.now(UTC),
+        evidence={"training_data": list(training_data)} if training_data else {},
     )
     db.add(candidate)
     db.flush()

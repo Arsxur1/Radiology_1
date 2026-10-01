@@ -1,6 +1,6 @@
 """Подготовить кандидата из открытой модели TorchXRayVision для теневого прогона.
 
-    python scripts/xrv_candidate.py --weights densenet121-res224-all --out /data/models-rw
+    python scripts/xrv_candidate.py --weights densenet121-res224-nih --out /data/models-rw
 
 Скачивает веса (или берёт --file для сервера без интернета), кладёт их как
 <out>/<sha256>.pt и пишет карточку и registration.json. Регистрация — вручную
@@ -17,7 +17,7 @@ from pathlib import Path
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--weights", default="densenet121-res224-all")
+    p.add_argument("--weights", default="densenet121-res224-nih")
     p.add_argument("--file", help="готовый файл весов (офлайн); иначе — скачивание")
     p.add_argument("--out", required=True)
     p.add_argument("--semver", default="0.1.0")

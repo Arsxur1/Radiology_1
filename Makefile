@@ -77,7 +77,7 @@ seed:
 # Веса и registration.json кладутся в ./models; регистрация — в админке (→ SHADOW).
 xrv-candidate:
 	docker compose run --rm -v $(PWD)/models:/data/models-rw -e PYTHONPATH=/app worker \
-		python scripts/xrv_candidate.py --weights $${XRV_WEIGHTS:-densenet121-res224-all} --out /data/models-rw
+		python scripts/xrv_candidate.py --weights $${XRV_WEIGHTS:-densenet121-res224-nih} --out /data/models-rw
 
 # Кандидат сегментации КТ (TotalSegmentator, задача total). Веса — в кэше воркера,
 # их отпечаток сверяется при каждом запуске. registration.json → ./models → админка.

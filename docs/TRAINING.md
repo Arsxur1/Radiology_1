@@ -24,11 +24,15 @@
 ## 2. Доступ к данным (делает каждый, кто работает с данными)
 
 1. Аккаунт на physionet.org.
-2. Обучение CITI «Data or Specimens Only Research».
-3. Запрос credentialed-доступа, затем **подписать DUA** на странице каждого проекта
-   (MIMIC-CXR-JPG, VinDr-CXR, VinDr-PCXR).
-4. **Юрист:** проверить лицензии на использование в коммерческом медизделии
-   до регистрации (ТЗ, вопрос 34).
+2. **VinDr-PCXR (дети) — уровень Restricted:** достаточно аккаунта и подписи DUA на
+   странице проекта, курс CITI не нужен. Это быстрый путь к педиатрическим данным.
+3. MIMIC-CXR-JPG и VinDr-CXR — Credentialed: курс CITI «Data or Specimens Only
+   Research», запрос credentialed-доступа, затем DUA на странице каждого проекта.
+4. **Все три набора — только для научных исследований** (п. 6 лицензий PhysioNet 1.5.0).
+   Модель на них — для теневой оценки и публикаций; гейт не продвинет её в ASSIST.
+   Для продукта — веса на коммерчески допустимых данных (xrv `-nih`, TotalSegmentator
+   `total`) и дообучение на данных NCMC. Подробно, со ссылками — `ISTOCHNIKI-I-PRAVO.md`.
+5. **Юрист:** подтвердить выводы по лицензиям до регистрации (ТЗ, вопрос 34).
 
 ### Правила DUA — обязательно
 
@@ -176,7 +180,7 @@ python -m app.training.cli train ... --manifest work/pcxr.jsonl work/ncmc.jsonl 
 
 ```bash
 # на сервере платформы (WORKER_EXTRAS=[infer] в .env, образ worker пересобран)
-make xrv-candidate                  # XRV_WEIGHTS=densenet121-res224-nih — только NIH-данные
+make xrv-candidate                  # по умолчанию densenet121-res224-nih — только NIH (коммерчески допустимо)
 # → models/<hash>.pt и models/xrv_all-0.1.0.registration.json
 # Админка → Модели → вставить registration.json → кандидат в SHADOW
 ```
