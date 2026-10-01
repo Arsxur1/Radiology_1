@@ -201,6 +201,23 @@ def xrv_code_map(pathologies: list[str]) -> dict[int, str]:
     return {i: report.mapped[p] for i, p in enumerate(pathologies) if p in report.mapped}
 
 
+def xrv_tensor(arr):  # pragma: no cover - нужен torchxrayvision
+    """Снимок (float, любой диапазон) → вход DenseNet TorchXRayVision 1×1×224×224.
+
+    Одна функция для работы платформы и для внешней проверки (scripts/eval_pediatric_cxr.py):
+    проверяется ровно та предобработка, что работает у врача.
+    """
+    import torch
+    import torchxrayvision as xrv
+
+    lo, hi = float(arr.min()), float(arr.max())
+    arr = (arr - lo) / (hi - lo) * 255 if hi > lo else arr * 0
+    img = xrv.datasets.normalize(arr, 255)[None, ...]
+    img = xrv.datasets.XRayCenterCrop()(img)
+    img = xrv.datasets.XRayResizer(224)(img)
+    return torch.from_numpy(img).float().unsqueeze(0)
+
+
 class XrvClassifier(ClassificationModel):  # pragma: no cover - нужен torchxrayvision
     """Открытая предобученная модель TorchXRayVision (DenseNet-121, 224 px).
 
@@ -243,15 +260,7 @@ class XrvClassifier(ClassificationModel):  # pragma: no cover - нужен torch
         self.weights_name = weights_name
 
     def _tensor(self, series_object_prefix: str):
-        import torch
-
-        arr = dicom_to_float(self._fetch(series_object_prefix))
-        lo, hi = float(arr.min()), float(arr.max())
-        arr = (arr - lo) / (hi - lo) * 255 if hi > lo else arr * 0
-        img = self._xrv.datasets.normalize(arr, 255)[None, ...]
-        img = self._xrv.datasets.XRayCenterCrop()(img)
-        img = self._xrv.datasets.XRayResizer(224)(img)
-        return torch.from_numpy(img).float().unsqueeze(0)
+        return xrv_tensor(dicom_to_float(self._fetch(series_object_prefix)))
 
     def predict(self, series_object_prefix: str) -> ClassificationOutput:
         import torch

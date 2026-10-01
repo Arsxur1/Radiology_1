@@ -75,6 +75,14 @@ seed:
 
 # Кандидат из открытой модели TorchXRayVision для теневого прогона (нужен WORKER_EXTRAS=[infer]).
 # Веса и registration.json кладутся в ./models; регистрация — в админке (→ SHADOW).
+# Проверка рентген-модели на детях (открытый набор Guangzhou, CC BY 4.0). Набор скачать
+# заранее: https://data.mendeley.com/datasets/rscbjbr9sj/2 → распаковать в KERMANY_DIR.
+eval-peds-cxr:
+	docker compose run --rm -v $${KERMANY_DIR:?укажите KERMANY_DIR=папка chest_xray}:/data/kermany:ro \
+		-v $(PWD)/models:/data/models-rw -e PYTHONPATH=/app worker \
+		python scripts/eval_pediatric_cxr.py --data /data/kermany \
+		--weights densenet121-res224-nih densenet121-res224-all --splits test --out /data/models-rw/peds-cxr-eval.json
+
 xrv-candidate:
 	docker compose run --rm -v $(PWD)/models:/data/models-rw -e PYTHONPATH=/app worker \
 		python scripts/xrv_candidate.py --weights $${XRV_WEIGHTS:-densenet121-res224-nih} --out /data/models-rw
