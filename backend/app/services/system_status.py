@@ -108,6 +108,13 @@ def check_debug_auth() -> tuple[bool, str]:
     return True, "выключен"
 
 
+def check_pseudonym_key() -> tuple[bool, str]:
+    """Ключ псевдонимизации задан и не учебный — без него приём остановлен (SR-9)."""
+    from app.core.pseudonym import key_state
+
+    return key_state()
+
+
 def check_raw_backlog() -> tuple[bool, str, bool]:
     """Снимки, застрявшие в orthanc-raw: исходники с ФИО, не дошедшие до врача."""
     from datetime import UTC, datetime
@@ -193,6 +200,7 @@ def collect() -> dict:
         run("watcher", lambda: check_watcher(r)),
         run("raw_backlog", check_raw_backlog),
         run("debug_auth", check_debug_auth),
+        run("pseudonym_key", check_pseudonym_key),
         run("disk", check_disk),
         run("queue", lambda: check_queue(r)),
         run("workers", check_workers),
@@ -214,7 +222,7 @@ def summarize(checks: list[Check]) -> dict:
     functions = {
         "viewer": state(["orthanc_clean"]),
         "ingest": state(["orthanc_raw", "watcher", "raw_backlog", "queue", "workers", "postgres", "postgres_idmap",
-                         "redis", "s3", "disk"]),
+                         "redis", "s3", "disk", "pseudonym_key"]),
         "ai": state(["workers", "models", "s3"]),
     }
     if not by.get("debug_auth", Check("", True, "")).ok:

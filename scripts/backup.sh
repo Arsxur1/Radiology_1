@@ -56,6 +56,17 @@ else
   echo "  postgres-keycloak не запущен — учётные записи не сохранены" >&2
 fi
 
+echo "→ Ключ псевдонимизации (PSEUDONYM_KEY)"
+# Без него новые исследования уже известных пациентов не свяжутся с ними после восстановления.
+# Только в зашифрованном виде; без ключа бэкапа — не сохраняется (храните .env отдельно).
+PKEY="$(grep -E '^PSEUDONYM_KEY=' .env 2>/dev/null | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' || true)"
+if [ -n "$PKEY" ] && [ -n "$KEY" ]; then
+  printf '%s' "$PKEY" | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass "file:$KEY" > "$DEST/pseudonym_key.enc"
+elif [ -n "$PKEY" ]; then
+  echo "  ВНИМАНИЕ: без BACKUP_ENCRYPT_KEY_FILE ключ псевдонимизации в копию не пишется — храните .env отдельно" >&2
+fi
+unset PKEY
+
 echo "→ Объектное хранилище (снимки, маски, контуры SEG)"
 $S3_SYNC dump "$S3_DIR"
 

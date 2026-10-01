@@ -1,7 +1,7 @@
 // Объединение и разъединение записей пациентов (ТЗ, FR-1).
 //
 // Решает проблему транслитерации кириллица/латиница: один человек под разными
-// написаниями ФИО/номерами. Поиск по нормализованному идентификатору → выбор
+// написаниями ФИО/номерами. Поиск по номеру карты или ФИО (сравниваются ключевые токены) → выбор
 // источника и приёмника → объединение. Разъединение — выделение новой записи
 // с выбранными идентификаторами и исследованиями. Все операции пишутся в аудит.
 
@@ -9,12 +9,24 @@ import { useState } from "react";
 import { ApiError, api } from "../api/client";
 import type { PatientOut, StudyOut } from "../api/types";
 
+// Номер карты и ФИО в обезличенном контуре не хранятся — только ключевые токены (SR-9).
+// Показываем вид идентификатора и короткий отпечаток токена: по нему видно, что у двух
+// записей один и тот же идентификатор, но не видно сам номер или ФИО.
+const ID_TYPE: Record<string, string> = { mrn: "номер карты", name_translit: "ФИО" };
+
+function idLabel(i: { id_type: string; normalized_value: string }): string {
+  const kind = ID_TYPE[i.id_type] ?? i.id_type;
+  return i.normalized_value.startsWith("h1:")
+    ? `${kind} · отпечаток ${i.normalized_value.slice(3, 11)}`
+    : `${kind}: ${i.normalized_value}`;
+}
+
 function IdentifierList({ p }: { p: PatientOut }) {
   return (
     <ul style={{ margin: "6px 0" }}>
       {p.identifiers.map((i) => (
         <li key={i.id} className="meas">
-          {i.id_type}: {i.normalized_value}
+          {idLabel(i)}
           {i.issuer ? ` (${i.issuer})` : ""}
           {!i.active && <span className="muted"> — неактивен</span>}
         </li>
@@ -79,7 +91,7 @@ function SplitPanel({ patient, onDone }: { patient: PatientOut; onDone: () => vo
                 checked={idIds.has(i.id)}
                 onChange={() => toggle(idIds, i.id, setIdIds)}
               />{" "}
-              {i.id_type}: {i.normalized_value}
+              {idLabel(i)}
             </label>
           ))}
           <strong>Исследования</strong>

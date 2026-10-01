@@ -89,13 +89,16 @@ def search_by_identifier(
     # Значение идентификатора в журнал не пишем (может быть ФИО) — только факт поиска.
     audit.record_access(db, user, AuditAction.PATIENT_ACCESS, entity_type="patient_search",
                         details={"what": "поиск пациента по идентификатору"})
-    """Поиск по нормализованному идентификатору (транслитерация уже применена клиентом
-    ingest). Возвращает кандидатов для ручного объединения при неоднозначности."""
-    from app.services.patient_matching import normalize_identifier
+    """Поиск по номеру карты или ФИО (нормализация и транслитерация — как при приёме).
 
-    norm = normalize_identifier(value)
+    В доверенном контуре хранятся только ключевые токены (SR-9): введённое значение
+    превращается в токен и сравнивается с ними. Возвращает кандидатов для объединения.
+    """
+    from app.services.patient_matching import identifier_value
+
+    tokens = [identifier_value(t, value) for t in ("mrn", "name_translit")]
     idents = db.execute(
-        select(PatientIdentifier).where(PatientIdentifier.normalized_value == norm)
+        select(PatientIdentifier).where(PatientIdentifier.normalized_value.in_(tokens))
     ).scalars().all()
     seen: dict[uuid.UUID, Patient] = {}
     for i in idents:

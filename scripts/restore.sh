@@ -58,6 +58,12 @@ if [ -f "$SRC/keycloak.sql.gz.enc" ] || [ -f "$SRC/keycloak.sql.gz" ]; then
   docker compose start keycloak >/dev/null 2>&1 || true
 fi
 
+if [ -f "$SRC/pseudonym_key.enc" ]; then
+  echo "→ Ключ псевдонимизации: в копии есть. Если .env потерян, восстановите PSEUDONYM_KEY командой"
+  echo "    openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass file:<ключ бэкапа> -in $SRC/pseudonym_key.enc"
+  echo "  (значение не выводится автоматически, чтобы не попасть в журналы)"
+fi
+
 echo "→ Объектное хранилище"
 $S3_SYNC restore "$S3_DIR"
 

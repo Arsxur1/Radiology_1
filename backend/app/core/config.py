@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     default_operating_mode: str = Field("RESEARCH", alias="DEFAULT_OPERATING_MODE")
     log_level: str = Field("INFO", alias="LOG_LEVEL")
     backend_secret_key: str = Field("dev-secret", alias="BACKEND_SECRET_KEY")
+    # Ключ псевдонимизации (HMAC): псевдонимы пациентов, обезличенные UID, токены
+    # идентификаторов. Без него приём не работает (app/core/pseudonym.py).
+    pseudonym_key: str = Field("", alias="PSEUDONYM_KEY")
     cors_origins: str = Field("http://localhost:3000", alias="BACKEND_CORS_ORIGINS")
 
     # PostgreSQL (доверенный контур)

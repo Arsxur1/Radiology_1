@@ -21,7 +21,7 @@ from app.models.imaging import Series, Study
 from app.models.patient import Patient, PatientIdentifier
 from app.services import audit
 from app.services.anonymization import DeidResult
-from app.services.patient_matching import match_patient, normalize_identifier
+from app.services.patient_matching import identifier_value, match_patient
 
 
 @dataclass
@@ -58,7 +58,7 @@ def _get_or_create_patient(
             PatientIdentifier(
                 patient_id=patient.id,
                 id_type="mrn",
-                normalized_value=normalize_identifier(plan.real_mrn),
+                normalized_value=identifier_value("mrn", plan.real_mrn),
                 issuer=None,
             )
         )
@@ -67,7 +67,7 @@ def _get_or_create_patient(
             PatientIdentifier(
                 patient_id=patient.id,
                 id_type="name_translit",
-                normalized_value=normalize_identifier(plan.real_name),
+                normalized_value=identifier_value("name_translit", plan.real_name),
             )
         )
     db.flush()

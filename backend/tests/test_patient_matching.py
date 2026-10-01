@@ -15,3 +15,9 @@ def test_uzbek_cyrillic():
 
 def test_whitespace_and_case():
     assert normalize_identifier("  ПЕТРОВ   ИВАН ") == "petrov ivan"
+
+
+def test_dicom_name_separator():
+    from app.services.patient_matching import normalize_identifier
+
+    assert normalize_identifier("Алиева^Дилноза^^") == normalize_identifier("alieva  dilnoza")

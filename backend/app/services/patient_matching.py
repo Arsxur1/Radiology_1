@@ -28,13 +28,25 @@ _CYR_LAT = {
 
 def normalize_identifier(value: str) -> str:
     """Привести написание к сопоставимому виду (регистр, пробелы, транслит)."""
-    value = value.strip().lower()
+    # «^» — разделитель частей имени в DICOM (PN); человек вводит пробел.
+    value = value.replace("^", " ").strip().lower()
     value = unicodedata.normalize("NFKC", value)
     out = []
     for ch in value:
         out.append(_CYR_LAT.get(ch, ch))
     normalized = "".join(out)
     return " ".join(normalized.split())
+
+
+def identifier_value(id_type: str, raw_value: str) -> str:
+    """Что хранится в patient_identifier: ключевой токен нормализованного значения.
+
+    Номер карты и ФИО в доверенном контуре не хранятся (SR-9) — только токен; совпадение
+    токенов = совпадение нормализованных значений, поэтому сопоставление работает.
+    """
+    from app.core.pseudonym import identifier_token
+
+    return identifier_token(id_type, normalize_identifier(raw_value))
 
 
 @dataclass
@@ -50,7 +62,7 @@ def match_patient(
 ) -> MatchResult:
     """Найти пациента по идентификатору. Молча связываем только при единственном
     совпадении; при 0 или >1 — требуем действия человека."""
-    norm = normalize_identifier(raw_value)
+    norm = identifier_value(id_type, raw_value)
     rows = (
         db.execute(
             select(PatientIdentifier).where(

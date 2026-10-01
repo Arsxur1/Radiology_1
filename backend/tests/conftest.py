@@ -7,6 +7,11 @@
 
 from __future__ import annotations
 
+import os
+
+# Ключ псевдонимизации для тестов (в рабочей системе — свой, из .env).
+os.environ.setdefault("PSEUDONYM_KEY", "test-pseudonym-key-0123456789abcdef0123456789")
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker

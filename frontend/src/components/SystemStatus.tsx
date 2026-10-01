@@ -16,6 +16,7 @@ const NAMES: Record<string, string> = {
   raw_backlog: "Застрявшие в приёмнике (с ФИО)",
   disk: "Диск с данными",
   debug_auth: "Отладочный вход без пароля",
+  pseudonym_key: "Ключ псевдонимизации",
   queue: "Очередь задач",
   workers: "Воркеры анализа",
   models: "Действующие модели",

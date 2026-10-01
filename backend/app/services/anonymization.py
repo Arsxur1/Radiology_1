@@ -12,9 +12,10 @@ Confidentiality: убираются/замещаются PHI-теги, гене�
 
 from __future__ import annotations
 
-import hashlib
 import uuid
 from dataclasses import dataclass, field
+
+from app.core import pseudonym
 
 try:  # pydicom доступен в контейнере; тесты профиля не требуют самого DICOM
     import pydicom
@@ -109,17 +110,19 @@ class DeidResult:
 
 
 def _derive_uid(source_uid: str) -> str:
-    """Детерминированно вывести обезличенный UID из исходного."""
-    digest = hashlib.sha256(source_uid.encode()).hexdigest()
+    """Детерминированно вывести обезличенный UID из исходного (HMAC с ключом площадки)."""
+    digest = pseudonym.digest("uid", source_uid).hex()
     numeric = str(int(digest[:24], 16))
     uid = f"{UID_ROOT}.{numeric}"
     return uid[:64]
 
 
 def _derive_patient_pseudonym(patient_id: str | None, issuer: str | None) -> uuid.UUID:
-    """Детерминированный UUID пациента из реального ID (одинаковый вход → тот же UUID)."""
-    key = f"{issuer or ''}|{patient_id or uuid.uuid4().hex}"
-    digest = hashlib.sha256(key.encode()).digest()
+    """Детерминированный UUID пациента из реального ID (одинаковый вход → тот же UUID).
+
+    HMAC с ключом площадки: без ключа перебором номеров карт псевдоним не обратить.
+    """
+    digest = pseudonym.digest("patient", f"{issuer or ''}|{patient_id or uuid.uuid4().hex}")
     return uuid.UUID(bytes=digest[:16])
 
 
