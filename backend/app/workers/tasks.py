@@ -57,7 +57,16 @@ def analyze_series(series_id: str, token: str) -> dict:
     return {"scheduled": series_id}
 
 
-@celery_app.task(name="ingest.process_raw_instance", bind=True, max_retries=3)
+# Повторы с растущей паузой 10 с → 10 мин (~50 мин всего): переживают перезапуск хранилища
+# или БД. Раньше 3 повтора по 10 с — минутный сбой S3 терял одиночный снимок (проверено).
+INGEST_MAX_RETRIES = 10
+
+
+def ingest_retry_delay(retries: int) -> int:
+    return min(600, 10 * 2 ** retries)
+
+
+@celery_app.task(name="ingest.process_raw_instance", bind=True, max_retries=INGEST_MAX_RETRIES)
 def process_raw_instance(self, raw_instance_id: str) -> dict:
     """Обработать один инстанс из raw-Orthanc: обезличить и зеркалировать.
 
@@ -109,7 +118,7 @@ def process_raw_instance(self, raw_instance_id: str) -> dict:
             idmap.close()
     except Exception as exc:  # noqa: BLE001
         logger.exception("Ошибка обработки инстанса %s", raw_instance_id)
-        raise self.retry(exc=exc, countdown=10) from exc
+        raise self.retry(exc=exc, countdown=ingest_retry_delay(self.request.retries)) from exc
     finally:
         raw.close()
         clean.close()

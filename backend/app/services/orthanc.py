@@ -38,6 +38,14 @@ class OrthancClient:
         r.raise_for_status()
         return r.json()
 
+    def instances_with_reception(self) -> list[tuple[str, str | None]]:
+        """Все инстансы узла и время приёма (метаданные Orthanc ReceptionDate, «YYYYMMDDTHHMMSS»)."""
+        out = []
+        for iid in self._client.get("/instances").raise_for_status().json():
+            r = self._client.get(f"/instances/{iid}/metadata/ReceptionDate")
+            out.append((iid, r.text.strip() if r.status_code == 200 else None))
+        return out
+
     def delete_instance(self, instance_id: str) -> None:
         r = self._client.delete(f"/instances/{instance_id}")
         if r.status_code != 404:  # уже удалён — не ошибка

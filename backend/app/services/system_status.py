@@ -74,6 +74,23 @@ def check_orthanc(factory) -> tuple[bool, str]:
         client.close()
 
 
+def check_raw_backlog() -> tuple[bool, str, bool]:
+    """Снимки, застрявшие в orthanc-raw: исходники с ФИО, не дошедшие до врача."""
+    from datetime import UTC, datetime
+
+    from app.services.orthanc import raw_client
+    from app.workers.orthanc_watcher import stuck_instances
+
+    client = raw_client()
+    try:
+        stuck = stuck_instances(client.instances_with_reception(), datetime.now(UTC))
+    finally:
+        client.close()
+    if stuck:
+        return True, f"не обработано {len(stuck)} снимков старше 10 мин — досылаются автоматически", True
+    return True, "нет", False
+
+
 def check_watcher(r) -> tuple[bool, str, bool] | tuple[bool, str]:
     from app.workers.orthanc_watcher import HEARTBEAT_KEY
 
@@ -140,6 +157,7 @@ def collect() -> dict:
         run("orthanc_clean", lambda: check_orthanc(clean_client)),
         run("orthanc_raw", lambda: check_orthanc(raw_client)),
         run("watcher", lambda: check_watcher(r)),
+        run("raw_backlog", check_raw_backlog),
         run("queue", lambda: check_queue(r)),
         run("workers", check_workers),
         run("models", lambda: check_models(SessionLocal)),
@@ -159,7 +177,8 @@ def summarize(checks: list[Check]) -> dict:
 
     functions = {
         "viewer": state(["orthanc_clean"]),
-        "ingest": state(["orthanc_raw", "watcher", "queue", "workers", "postgres", "postgres_idmap", "redis", "s3"]),
+        "ingest": state(["orthanc_raw", "watcher", "raw_backlog", "queue", "workers", "postgres", "postgres_idmap",
+                         "redis", "s3"]),
         "ai": state(["workers", "models", "s3"]),
     }
     overall = "down" if "down" in (functions["viewer"], functions["ingest"]) else \
