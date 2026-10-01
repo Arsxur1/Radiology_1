@@ -13,6 +13,8 @@ const NAMES: Record<string, string> = {
   orthanc_clean: "Просмотрщик (обезличенный Orthanc)",
   orthanc_raw: "Приёмник от PACS (orthanc-raw)",
   watcher: "Наблюдатель приёма",
+  raw_backlog: "Застрявшие в приёмнике (с ФИО)",
+  disk: "Диск с данными",
   queue: "Очередь задач",
   workers: "Воркеры анализа",
   models: "Действующие модели",

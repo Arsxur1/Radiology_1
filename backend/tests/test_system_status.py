@@ -11,8 +11,8 @@ from app.main import app
 from app.services import system_status as ss
 from app.services.system_status import Check, check_backup, check_watcher, run, summarize
 
-OK = ["postgres", "postgres_idmap", "redis", "s3", "orthanc_clean", "orthanc_raw", "watcher", "queue",
-      "workers", "models", "backup"]
+OK = ["postgres", "postgres_idmap", "redis", "s3", "orthanc_clean", "orthanc_raw", "watcher", "raw_backlog",
+      "disk", "queue", "workers", "models", "backup"]
 
 
 def _checks(**over):
@@ -89,3 +89,17 @@ def test_ready_is_public_summary_and_status_is_admin_only(monkeypatch):
     assert c.get("/system/status", headers=h).status_code == 403
     r = c.get("/system/status", headers={**h, "X-Debug-Roles": "admin"})
     assert r.status_code == 200 and len(r.json()["checks"]) == len(OK)
+
+
+def test_disk_thresholds():
+    from app.services.system_status import disk_state
+
+    gb = 1024**3
+    assert disk_state(1000 * gb, 600 * gb) == (True, "свободно 600 ГБ из 1000 ГБ (60%)", False)
+    ok, detail, warn = disk_state(1000 * gb, 100 * gb)
+    assert ok and warn and "расширять" in detail                     # 10 % — предупреждение
+    ok, detail, warn = disk_state(1000 * gb, 30 * gb)
+    assert not ok and "остановятся" in detail                         # 3 % — приём под угрозой
+    assert disk_state(100 * gb, 8 * gb)[0] is False                    # меньше 10 ГБ — тоже
+    st = summarize(_checks(disk=(False, False)))
+    assert st["functions"]["ingest"] == "down" and st["functions"]["viewer"] == "ok"

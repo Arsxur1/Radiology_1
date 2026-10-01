@@ -74,6 +74,30 @@ def check_orthanc(factory) -> tuple[bool, str]:
         client.close()
 
 
+DISK_WARN = (0.15, 50)    # доля свободного места / ГБ — предупреждение
+DISK_DOWN = (0.05, 10)    # ниже — приём и базы вот-вот остановятся
+
+
+def disk_state(total: int, free: int) -> tuple[bool, str, bool]:
+    gb, frac = free / 1024**3, free / total if total else 0.0
+    detail = f"свободно {gb:.0f} ГБ из {total / 1024**3:.0f} ГБ ({frac:.0%})"
+    if frac < DISK_DOWN[0] or gb < DISK_DOWN[1]:
+        return False, detail + " — места почти нет: приём, базы и бэкап остановятся", False
+    if frac < DISK_WARN[0] or gb < DISK_WARN[1]:
+        return True, detail + " — пора расширять диск или переносить архив", True
+    return True, detail, False
+
+
+def check_disk() -> tuple[bool, str, bool]:
+    """Диск с данными: тома docker (снимки, базы, S3) лежат на одном диске с томом приёма."""
+    import shutil
+
+    from app.core.config import get_settings
+
+    u = shutil.disk_usage(get_settings().ingest_watch_dir)
+    return disk_state(u.total, u.free)
+
+
 def check_raw_backlog() -> tuple[bool, str, bool]:
     """Снимки, застрявшие в orthanc-raw: исходники с ФИО, не дошедшие до врача."""
     from datetime import UTC, datetime
@@ -158,6 +182,7 @@ def collect() -> dict:
         run("orthanc_raw", lambda: check_orthanc(raw_client)),
         run("watcher", lambda: check_watcher(r)),
         run("raw_backlog", check_raw_backlog),
+        run("disk", check_disk),
         run("queue", lambda: check_queue(r)),
         run("workers", check_workers),
         run("models", lambda: check_models(SessionLocal)),
@@ -178,7 +203,7 @@ def summarize(checks: list[Check]) -> dict:
     functions = {
         "viewer": state(["orthanc_clean"]),
         "ingest": state(["orthanc_raw", "watcher", "raw_backlog", "queue", "workers", "postgres", "postgres_idmap",
-                         "redis", "s3"]),
+                         "redis", "s3", "disk"]),
         "ai": state(["workers", "models", "s3"]),
     }
     overall = "down" if "down" in (functions["viewer"], functions["ingest"]) else \
