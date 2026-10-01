@@ -28,7 +28,7 @@ from app.models.ml import ModelStatus, ModelVersion
 from app.models.patient import Patient, PatientIdentifier
 from app.services import segmentation
 from app.services.inference_adapters import StubSegmentationModel
-from app.services.patient_matching import normalize_identifier
+from app.services.patient_matching import identifier_value
 from app.services.structure_catalog import structures_for_region
 
 CHEST_APPLICABILITY = {
@@ -207,7 +207,7 @@ def seed(db: Session, *, with_storage: bool = False) -> dict:
     db.flush()
     db.add(PatientIdentifier(
         patient_id=patient.id, id_type="name_translit",
-        normalized_value=normalize_identifier("Демо Пациент"),
+        normalized_value=identifier_value("name_translit", "Демо Пациент"),   # токен, не ФИО (SR-9)
     ))
     db.flush()
 

@@ -54,6 +54,8 @@ jobs:
       POSTGRES_PASSWORD: medviz
       POSTGRES_DB: medviz
       PYTHONPATH: .
+      # Ключ псевдонимизации только для CI (демо-данные пишут токены идентификаторов).
+      PSEUDONYM_KEY: ci-only-pseudonym-key-0123456789abcdef0123
     defaults:
       run:
         working-directory: backend
