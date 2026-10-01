@@ -72,7 +72,7 @@ class InferenceResult(UUIDMixin, TimestampMixin, Base):
         GUID(), ForeignKey("series.id"), nullable=False, index=True
     )
     model_version_id: Mapped[uuid.UUID] = mapped_column(
-        GUID(), ForeignKey("model_version.id"), nullable=False
+        GUID(), ForeignKey("model_version.id"), nullable=False, index=True
     )
     # Полная трассировка (SR-5): артефакт, время, метрики, параметры препроцессинга.
     artifact_ref: Mapped[str | None] = mapped_column(String(512), nullable=True)  # S3-ключ
@@ -94,7 +94,7 @@ class Finding(UUIDMixin, TimestampMixin, Base):
         GUID(), ForeignKey("series.id"), nullable=False, index=True
     )
     inference_result_id: Mapped[uuid.UUID | None] = mapped_column(
-        GUID(), ForeignKey("inference_result.id"), nullable=True
+        GUID(), ForeignKey("inference_result.id"), nullable=True, index=True
     )
     # Код локализации: SNOMED CT либо RadLex (по умолчанию RadLex, см. VOPROSY-K-TZ.md).
     coding_system: Mapped[str] = mapped_column(String(32), default="RadLex", nullable=False)

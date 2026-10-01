@@ -89,7 +89,8 @@ export const api = {
     request<IdentityOut>(`/studies/${studyId}/identity?purpose=${encodeURIComponent(purpose)}`),
 
   auditList: (params: URLSearchParams) => request<AuditEntry[]>(`/audit?${params}`),
-  auditVerify: () => request<{ intact: boolean }>("/audit/verify"),
+  auditVerify: () =>
+    request<{ intact: boolean; checked: number; broken_at_seq: number | null }>("/audit/verify"),
   auditCsvUrl: (params: URLSearchParams) => requestBlobUrl(`/audit/export.csv?${params}`),
 
   chestVocabulary: (modality: string) =>

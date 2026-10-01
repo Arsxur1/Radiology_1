@@ -75,25 +75,44 @@ def record(
     return entry
 
 
+def verify_chain_report(db: Session, batch: int = 10000) -> dict:
+    """Проверить хеш-цепочку потоком: только нужные колонки, пачками по batch строк.
+
+    Раньше весь журнал загружался в память объектами — на году работы клиники это 14 с и
+    ~800 МБ при каждом открытии страницы «Журнал». Возвращает, сколько записей проверено
+    и на какой записи цепочка разорвана (если разорвана).
+    """
+    stmt = (
+        select(AuditLog.seq, AuditLog.actor, AuditLog.actor_role, AuditLog.action, AuditLog.entity_type,
+               AuditLog.entity_id, AuditLog.details, AuditLog.prev_hash, AuditLog.entry_hash)
+        .order_by(AuditLog.seq.asc())
+        .execution_options(yield_per=batch)
+    )
+    prev_hash: str | None = None
+    checked = 0
+    result = db.execute(stmt)
+    try:   # при раннем выходе потоковый курсор надо закрыть явно
+        for seq, actor, role, action, etype, eid, details, row_prev, row_hash in result:
+            payload = {
+                "actor": actor,
+                "actor_role": role,
+                "action": action.value,
+                "entity_type": etype,
+                "entity_id": str(eid) if eid else None,
+                "details": details,
+            }
+            if row_prev != prev_hash or row_hash != _compute_hash(prev_hash, payload):
+                return {"intact": False, "checked": checked, "broken_at_seq": seq}
+            prev_hash = row_hash
+            checked += 1
+    finally:
+        result.close()
+    return {"intact": True, "checked": checked, "broken_at_seq": None}
+
+
 def verify_chain(db: Session) -> bool:
     """Проверить целостность хеш-цепочки аудит-лога (для приёмки, раздел 10)."""
-    rows = db.execute(select(AuditLog).order_by(AuditLog.seq.asc())).scalars().all()
-    prev_hash: str | None = None
-    for row in rows:
-        payload = {
-            "actor": row.actor,
-            "actor_role": row.actor_role,
-            "action": row.action.value,
-            "entity_type": row.entity_type,
-            "entity_id": str(row.entity_id) if row.entity_id else None,
-            "details": row.details,
-        }
-        if row.prev_hash != prev_hash:
-            return False
-        if row.entry_hash != _compute_hash(prev_hash, payload):
-            return False
-        prev_hash = row.entry_hash
-    return True
+    return verify_chain_report(db)["intact"]
 
 
 def record_access(db: Session, user, action: AuditAction, *, entity_type: str,

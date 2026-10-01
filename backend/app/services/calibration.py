@@ -23,7 +23,7 @@ from app.models.audit import AuditAction
 from app.models.imaging import Series, Study
 from app.models.ml import InferenceResult, ModelVersion
 from app.services import audit, model_registry
-from app.services.site_labels import NORMAL_CODE, _split, finalized_study_ids, series_truth
+from app.services.site_labels import NORMAL_CODE, SeriesKey, _split, finalized_study_ids, truths_for_series
 from app.training.thresholds import youden_threshold
 
 
@@ -37,26 +37,29 @@ def calibration_proposal(
     codes = sorted(c for c in current if c != NORMAL_CODE)
     finalized = finalized_study_ids(db)
     rows = db.execute(
-        select(InferenceResult, Series, Study)
+        select(InferenceResult.metrics, Series.id, Study.id, Study.patient_id)
         .join(Series, InferenceResult.series_id == Series.id)
         .join(Study, Series.study_id == Study.id)
         .where(InferenceResult.model_version_id == mv.id)
         .order_by(InferenceResult.created_at)
     ).all()
 
+    # Истина врача — одним пакетом по всем сериям с подписанным заключением.
+    truth_by_series = truths_for_series(
+        db, list({r[1]: SeriesKey(r[1], r[2]) for r in rows if r[2] in finalized}.values()), finalized)
     seen: set = set()
     held_out = 0
     truths: dict[str, list[int]] = {c: [] for c in codes}
     scores: dict[str, list[float]] = {c: [] for c in codes}
-    for inference, series, study in rows:
-        if series.id in seen or study.id not in finalized:
+    for metrics, series_id, study_id, patient_id in rows:
+        if series_id in seen or study_id not in finalized:
             continue
-        seen.add(series.id)
-        if _split(str(study.patient_id), 0.15, 0.10) == "test":
+        seen.add(series_id)
+        if _split(str(patient_id), 0.15, 0.10) == "test":
             held_out += 1
             continue
-        probs = (inference.metrics or {}).get("probabilities", {})
-        positives = series_truth(db, series, finalized).positives
+        probs = (metrics or {}).get("probabilities", {})
+        positives = truth_by_series[series_id].positives
         for c in codes:
             if c in probs:
                 truths[c].append(1 if c in positives else 0)

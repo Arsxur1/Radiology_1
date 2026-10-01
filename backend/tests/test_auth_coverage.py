@@ -179,3 +179,18 @@ def test_identity_reveal_is_role_limited_and_audited(client, db):
     log = db.query(AuditLog).filter(AuditLog.entity_type == "identity").all()
     assert len(log) == 1 and log[0].details["purpose"] == "report"
     assert "Karimov" not in str(log[0].details)            # в журнале — факт и цель, не сами PHI
+
+
+def test_audit_verify_reports_where_chain_breaks(db):
+    from app.models.audit import AuditAction, AuditLog
+    from app.services import audit
+
+    for i in range(5):
+        audit.record(db, actor=f"dr.{i}", action=AuditAction.PATIENT_ACCESS, entity_type="study")
+    db.commit()
+    assert audit.verify_chain_report(db, batch=2) == {"intact": True, "checked": 5, "broken_at_seq": None}
+    row = db.query(AuditLog).filter(AuditLog.seq == 3).one()
+    row.actor = "подмена"                          # тестовая БД без триггера: имитация подделки
+    db.commit()
+    assert audit.verify_chain_report(db, batch=2) == {"intact": False, "checked": 2, "broken_at_seq": 3}
+    assert audit.verify_chain(db) is False

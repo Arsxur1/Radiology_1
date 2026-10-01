@@ -15,7 +15,9 @@
 from __future__ import annotations
 
 import hashlib
+import uuid
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -52,34 +54,61 @@ def finalized_study_ids(db: Session) -> set:
     return set(db.execute(select(Report.study_id).where(Report.finalized_by.is_not(None))).scalars())
 
 
-def series_truth(db: Session, series: Series, finalized: set | None = None) -> SeriesTruth:
+CHUNK = 5000   # размер пакета для IN (...): и PostgreSQL, и SQLite держат такие списки
+
+
+class SeriesKey(NamedTuple):
+    """Минимум для истины врача — без загрузки полных объектов серии."""
+
+    id: uuid.UUID
+    study_id: uuid.UUID
+
+
+def truths_for_series(db: Session, series: list, finalized: set | None = None) -> dict:
+    """Истина врача сразу для многих серий: два запроса на пакет вместо двух на серию.
+
+    На году работы клиники (десятки тысяч серий) построчная выборка занимала минуты —
+    сводная панель и отчёт теневого прогона не укладывались в таймаут шлюза.
+    """
     finalized = finalized_study_ids(db) if finalized is None else finalized
-    rows = db.execute(
-        select(Finding)
-        .outerjoin(InferenceResult, Finding.inference_result_id == InferenceResult.id)
-        .where(Finding.series_id == series.id)
-        .where((InferenceResult.id.is_(None)) | (InferenceResult.shadow_run.is_(False)))
-    ).scalars().all()
-    truth = SeriesTruth(finalized=series.study_id in finalized)
-    for f in rows:
-        if not _is_cxr(f.code):
-            continue
-        if f.confirmation_status == ConfirmationStatus.REJECTED:
-            truth.negatives.add(f.code)
-        elif f.source == FindingSource.PHYSICIAN or f.confirmation_status == ConfirmationStatus.CONFIRMED:
-            truth.positives.add(f.code)
-    # Врач заменил код находки ИИ: исходный код — ошибка модели, т.е. негатив.
-    fids = [f.id for f in rows]
-    if fids:
-        for c in db.execute(
-            select(Correction).where(Correction.finding_id.in_(fids),
-                                     Correction.correction_type == CorrectionType.MODIFIED)
-        ).scalars():
-            old, new = (c.before or {}).get("code"), (c.after or {}).get("code")
-            if _is_cxr(old) and old != new:
-                truth.negatives.add(old)
-    truth.negatives -= truth.positives
-    return truth
+    out = {se.id: SeriesTruth(finalized=se.study_id in finalized) for se in series}
+    ids = list(out)
+    for i in range(0, len(ids), CHUNK):
+        part = ids[i:i + CHUNK]
+        rows = db.execute(
+            select(Finding.id, Finding.series_id, Finding.code, Finding.source, Finding.confirmation_status)
+            .outerjoin(InferenceResult, Finding.inference_result_id == InferenceResult.id)
+            .where(Finding.series_id.in_(part))
+            .where((InferenceResult.id.is_(None)) | (InferenceResult.shadow_run.is_(False)))
+        ).all()
+        series_of: dict = {}
+        for fid, sid, code, source, status in rows:
+            series_of[fid] = sid
+            if not _is_cxr(code):
+                continue
+            truth = out[sid]
+            if status == ConfirmationStatus.REJECTED:
+                truth.negatives.add(code)
+            elif source == FindingSource.PHYSICIAN or status == ConfirmationStatus.CONFIRMED:
+                truth.positives.add(code)
+        # Врач заменил код находки ИИ: исходный код — ошибка модели, т.е. негатив.
+        fids = list(series_of)
+        for j in range(0, len(fids), CHUNK):
+            for fid, before, after in db.execute(
+                select(Correction.finding_id, Correction.before, Correction.after)
+                .where(Correction.finding_id.in_(fids[j:j + CHUNK]),
+                       Correction.correction_type == CorrectionType.MODIFIED)
+            ).all():
+                old, new = (before or {}).get("code"), (after or {}).get("code")
+                if _is_cxr(old) and old != new:
+                    out[series_of[fid]].negatives.add(old)
+    for truth in out.values():
+        truth.negatives -= truth.positives
+    return out
+
+
+def series_truth(db: Session, series: Series, finalized: set | None = None) -> SeriesTruth:
+    return truths_for_series(db, [series], finalized)[series.id]
 
 
 def labels_from_truth(truth: SeriesTruth, modality: str) -> dict[str, int | None]:
@@ -112,24 +141,27 @@ def site_manifest(
     """Записи в формате app.training.manifest.ManifestRecord + сводный отчёт."""
     finalized = finalized_study_ids(db)
     rows = db.execute(
-        select(Series, Study).join(Study, Series.study_id == Study.id).where(Series.modality.in_(modalities))
+        select(Series.id, Series.study_id, Series.modality, Series.series_instance_uid, Series.object_prefix,
+               Study.patient_age_years, Study.patient_id)
+        .join(Study, Series.study_id == Study.id).where(Series.modality.in_(modalities))
     ).all()
     records: list[dict] = []
     report = {"records": 0, "skipped_unlabeled": 0, "skipped_no_age": 0,
               "finalized": 0, "positives": {}, "populations": {}}
-    for series, study in rows:
-        truth = series_truth(db, series, finalized)
+    truths = truths_for_series(db, [SeriesKey(r.id, r.study_id) for r in rows], finalized)
+    for series in rows:
+        truth = truths[series.id]
         labels = labels_from_truth(truth, series.modality)
         if not any(v is not None for v in labels.values()):
             report["skipped_unlabeled"] += 1
             continue
-        age = study.patient_age_years
+        age = series.patient_age_years
         if age is None:
             # Без возраста нельзя отнести к взрослым/детям (п. 1.2) — не используем.
             report["skipped_no_age"] += 1
             continue
         population = "pediatric" if age < 18 else "adult"
-        patient_key = str(study.patient_id)
+        patient_key = str(series.patient_id)
         records.append({
             "dataset": SITE_DATASET,
             "image_id": series.series_instance_uid,

@@ -29,6 +29,7 @@ function describe(e: AuditEntry): string {
 export function AuditLog() {
   const [rows, setRows] = useState<AuditEntry[]>([]);
   const [intact, setIntact] = useState<boolean | null>(null);
+  const [verify, setVerify] = useState<{ checked: number; broken_at_seq: number | null } | null>(null);
   const [actor, setActor] = useState("");
   const [action, setAction] = useState("");
   const [since, setSince] = useState("");
@@ -65,7 +66,13 @@ export function AuditLog() {
   );
 
   useEffect(() => {
-    api.auditVerify().then((r) => setIntact(r.intact)).catch(() => setIntact(null));
+    api
+      .auditVerify()
+      .then((r) => {
+        setIntact(r.intact);
+        setVerify(r);
+      })
+      .catch(() => setIntact(null));
     void load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -89,8 +96,16 @@ export function AuditLog() {
     <div className="layout">
       <div className="row spread">
         <h2>Журнал аудита</h2>
-        {intact === true && <span className="badge badge-confirmed">цепочка записей цела</span>}
-        {intact === false && <span className="badge badge-rejected">НАРУШЕНА целостность журнала</span>}
+        {intact === true && (
+          <span className="badge badge-confirmed">
+            цепочка записей цела{verify ? ` (проверено ${verify.checked.toLocaleString("ru-RU")})` : ""}
+          </span>
+        )}
+        {intact === false && (
+          <span className="badge badge-rejected">
+            НАРУШЕНА целостность журнала{verify?.broken_at_seq ? ` — с записи №${verify.broken_at_seq}` : ""}
+          </span>
+        )}
       </div>
       <p className="muted">
         Все действия и обращения к данным. Журнал только дополняется; изменить или удалить запись нельзя.

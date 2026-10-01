@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.models.imaging import Series, Study
 from app.models.ml import InferenceResult, ModelVersion
-from app.services.site_labels import NORMAL_CODE, finalized_study_ids, series_truth
+from app.services.site_labels import NORMAL_CODE, SeriesKey, finalized_study_ids, truths_for_series
 
 AGE_GROUPS = ((0, 1, "0–1 год"), (1, 5, "1–5 лет"), (5, 12, "5–12 лет"), (12, 18, "12–18 лет"),
               (18, 200, "взрослые"))
@@ -51,29 +51,34 @@ def shadow_report(db: Session, model_version_id: uuid.UUID) -> dict:
         raise LookupError("Версия модели не найдена")
     codes = sorted(c for c in (mv.operating_points or {}) if c != NORMAL_CODE)
     finalized = finalized_study_ids(db)
+    # Только нужные колонки: полные объекты с JSON-метриками на десятках тысяч прогонов
+    # занимали секунды и сотни мегабайт.
     rows = db.execute(
-        select(InferenceResult, Series, Study)
+        select(InferenceResult.metrics, Series.id, Study.id, Study.manufacturer, Study.patient_age_years)
         .join(Series, InferenceResult.series_id == Series.id)
         .join(Study, Series.study_id == Study.id)
         .where(InferenceResult.model_version_id == mv.id, InferenceResult.shadow_run.is_(True))
         .order_by(InferenceResult.created_at)
     ).all()
 
+    # Истина врача — одним пакетом (раньше — два запроса на серию: минуты на годе работы).
+    truth_by_series = truths_for_series(
+        db, list({r[1]: SeriesKey(r[1], r[2]) for r in rows if r[2] in finalized}.values()), finalized)
     per_code = {c: {"tp": 0, "fp": 0, "fn": 0, "tn": 0} for c in codes}
     per_device: dict[str, dict] = {}
     per_age: dict[str, dict] = {}
     seen: set = set()
     total = {"tp": 0, "fp": 0, "fn": 0}
     shadow_runs = len(rows)
-    for inference, series, study in rows:
-        if series.id in seen or study.id not in finalized:
+    for metrics, series_id, study_id, manufacturer, age in rows:
+        if series_id in seen or study_id not in finalized:
             continue  # один результат на серию (прогоны детерминированы) и только подписанные
-        seen.add(series.id)
-        truth = series_truth(db, series, finalized)
-        drafted = set((inference.metrics or {}).get("drafted", []))
-        dev = per_device.setdefault(study.manufacturer or "неизвестно", {"cases": 0, "tp": 0, "fp": 0, "fn": 0})
+        seen.add(series_id)
+        truth = truth_by_series[series_id]
+        drafted = set((metrics or {}).get("drafted", []))
+        dev = per_device.setdefault(manufacturer or "неизвестно", {"cases": 0, "tp": 0, "fp": 0, "fn": 0})
         dev["cases"] += 1
-        grp = per_age.setdefault(age_group(study.patient_age_years), {"cases": 0, "tp": 0, "fp": 0, "fn": 0})
+        grp = per_age.setdefault(age_group(age), {"cases": 0, "tp": 0, "fp": 0, "fn": 0})
         grp["cases"] += 1
         for c in codes:
             pred, real = c in drafted, c in truth.positives

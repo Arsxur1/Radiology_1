@@ -114,4 +114,5 @@ def verify_audit(
     _: CurrentUser = Depends(require_roles(Role.AUDITOR, Role.ADMIN)),
 ) -> dict:
     """Проверка целостности хеш-цепочки (критерий приёмки, раздел 10)."""
-    return {"intact": audit.verify_chain(db)}
+    # Сколько записей проверено и где разрыв — аудитору нужно не только «да/нет».
+    return audit.verify_chain_report(db)
