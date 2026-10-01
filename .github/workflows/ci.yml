@@ -81,6 +81,29 @@ jobs:
       - name: Build (строгий tsc + vite)
         run: npm run build
 
+  # Известные уязвимости зависимостей (PyPI/OSV и npm). Отдельная задача: новая CVE
+  # видна сразу и по имени, не смешиваясь с падением тестов.
+  deps-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Python (backend, включая dev)
+        working-directory: backend
+        run: |
+          python -m venv /tmp/deps && /tmp/deps/bin/pip install -q --upgrade pip
+          /tmp/deps/bin/pip install -q ".[dev]"
+          /tmp/deps/bin/pip freeze --exclude-editable | grep -v -i '^medviz' > /tmp/req.txt
+          pipx run pip-audit -r /tmp/req.txt --no-deps --strict
+      - name: npm (frontend)
+        working-directory: frontend
+        run: npm audit --audit-level=moderate
+
   # Сборка образов развёртывания (как на сервере клиники): backend и шлюз web.
   images:
     runs-on: ubuntu-latest

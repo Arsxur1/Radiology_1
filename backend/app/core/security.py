@@ -3,8 +3,8 @@
 Проверка подписи по JWKS (RS256), издателя (iss), аудитории (aud) и срока (exp).
 Роли берутся из realm_access.roles Keycloak и отображаются на роли платформы.
 
-Библиотека `jose` импортируется лениво внутри функции проверки подписи, чтобы
-проблемы бинарного backend в отдельных средах не роняли импорт приложения.
+Библиотека PyJWT импортируется лениво внутри функции проверки подписи, чтобы
+проблемы бинарного backend (cryptography) в отдельных средах не роняли импорт приложения.
 Чистые функции (роли, проверка claims) от неё не зависят и полностью тестируемы.
 """
 
@@ -105,8 +105,9 @@ def decode_token(
     audience: str | None,
 ) -> dict:
     """Проверить подпись токена по JWKS и вернуть claims. Бросает AuthError."""
-    from jose import jwt  # ленивый импорт (см. модульную заметку)
-    from jose.exceptions import JWTError
+    import jwt  # ленивый импорт (см. модульную заметку)
+    from jwt import PyJWK
+    from jwt.exceptions import PyJWTError as JWTError
 
     keys = _jwks_for(jwks_url).get()
     try:
@@ -125,8 +126,10 @@ def decode_token(
 
     try:
         # aud проверяем вручную в validate_claims (Keycloak-специфика azp/account).
+        # exp/iat/nbf проверяет PyJWT; iss и aud — validate_claims ниже.
         claims = jwt.decode(
-            token, key, algorithms=["RS256"], options={"verify_aud": False}
+            token, PyJWK(key, "RS256").key, algorithms=["RS256"],
+            options={"verify_aud": False, "verify_iss": False}, leeway=30,
         )
     except JWTError as e:
         raise AuthError("Подпись токена недействительна") from e
