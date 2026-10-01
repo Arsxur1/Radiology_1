@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime, timedelta
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -49,17 +50,42 @@ class StudyOut(BaseModel):
 
 @router.get("", response_model=list[StudyOut])
 def list_studies(
+    response: Response = None,  # type: ignore[assignment]  # прямой вызов (тесты) — без заголовка
     modality: str | None = None,
     patient_id: uuid.UUID | None = None,
-    limit: int = 50,
+    status: Annotated[str, Query(pattern="^(all|unsigned|signed)$")] = "all",
+    date_from: date | None = None,
+    date_to: date | None = None,
+    order: Annotated[str, Query(pattern="^(asc|desc)$")] = "desc",
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
     db: Session = Depends(get_db),
 ) -> list[StudyOut]:
-    stmt = select(Study).order_by(Study.study_date.desc().nullslast()).limit(limit)
+    """Рабочий список. Фильтры — на сервере: «неописанные» должны находиться среди всех
+    исследований, а не среди последних N (при сотнях исследований в день старое
+    неподписанное иначе выпадало бы из очереди). Всего по фильтру — в X-Total-Count."""
+    from sqlalchemy import exists, func
+
+    from app.models.ml import Report
+
+    conds = []
     if modality:
-        stmt = stmt.where(Study.modality == modality)
+        conds.append(Study.modality == modality)
     if patient_id:
-        stmt = stmt.where(Study.patient_id == patient_id)
+        conds.append(Study.patient_id == patient_id)
+    if status != "all":
+        signed = exists().where(Report.study_id == Study.id, Report.finalized_by.is_not(None))
+        conds.append(signed if status == "signed" else ~signed)
+    if date_from:
+        conds.append(Study.study_date >= datetime.combine(date_from, datetime.min.time()))
+    if date_to:
+        conds.append(Study.study_date < datetime.combine(date_to, datetime.min.time()) + timedelta(days=1))
+    by_date = Study.study_date.asc().nullslast() if order == "asc" else Study.study_date.desc().nullslast()
+    stmt = select(Study).where(*conds).order_by(by_date, Study.id).limit(limit).offset(offset)
     studies = db.execute(stmt).scalars().all()
+    if response is not None:
+        total = db.execute(select(func.count()).select_from(Study).where(*conds)).scalar_one()
+        response.headers["X-Total-Count"] = str(total)
     pending, reports = _worklist_status(db, [s.id for s in studies])
     return [_to_study_out(s, pending.get(s.id, 0), reports.get(s.id, "none")) for s in studies]
 

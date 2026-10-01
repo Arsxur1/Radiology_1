@@ -79,7 +79,15 @@ export class ApiError extends Error {
   }
 }
 
+/** Страница рабочего списка: исследования и общее число по фильтру (X-Total-Count). */
+async function studiesPage(params: URLSearchParams): Promise<{ items: StudyOut[]; total: number }> {
+  const resp = await send(`/studies?${params}`);
+  if (!resp.ok) throw new ApiError(resp.status, resp.statusText);
+  return { items: (await resp.json()) as StudyOut[], total: Number(resp.headers.get("X-Total-Count") ?? 0) };
+}
+
 export const api = {
+  studiesPage,
   pacsPriors: (studyId: string) => request<PriorOut[]>(`/studies/${studyId}/pacs-priors`),
   retrievePacsPrior: (studyId: string, token: string) =>
     request<{ requested: boolean; detail: string }>(`/studies/${studyId}/pacs-priors/${token}/retrieve`, {
