@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from app.db.session import IdMapSessionLocal, SessionLocal
 from app.services import ingest, storage
 from app.services.anonymization import anonymize_dataset
+from app.services.dicom_charset import normalize_charset
 from app.services.orthanc import clean_client, raw_client
 from app.workers.celery_app import celery_app
 from app.workers.dicom_meta import extract_series_meta, extract_study_meta
@@ -81,11 +82,13 @@ def process_raw_instance(self, raw_instance_id: str) -> dict:
     try:
         raw_bytes = raw.get_instance_file(raw_instance_id)
         ds = pydicom.dcmread(io.BytesIO(raw_bytes))
+        # До обезличивания: ФИО для идентифицирующего контура должно быть прочитано верно.
+        normalize_charset(ds, settings.dicom_fallback_charset)
 
         clean_ds, plan = anonymize_dataset(ds)
 
         buf = io.BytesIO()
-        clean_ds.save_as(buf, write_like_original=False)
+        clean_ds.save_as(buf, enforce_file_format=True)
         clean_bytes = buf.getvalue()
 
         # Обезличенный объект — в clean-Orthanc и MinIO (пиксели не в БД).
