@@ -173,7 +173,8 @@ export async function handleCallback(search: string): Promise<string> {
   });
   // Только внутренний путь приложения: «//host» или «https://…» увели бы на чужой сайт.
   const to = typeof saved.returnTo === "string" ? saved.returnTo : "/";
-  return to.startsWith("/") && !to.startsWith("//") ? to : "/";
+  // И без «\»: браузер читает «/\evil.com» как «//evil.com» (GHSA-wrjc-x8rr-h8h6).
+  return to.startsWith("/") && !to.startsWith("//") && !to.includes("\\") ? to : "/";
 }
 
 export function oidcAccessToken(): string | null {
