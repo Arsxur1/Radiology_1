@@ -256,6 +256,18 @@ export function PilotDashboard() {
           </div>
         </div>
 
+        <div className="card">
+          <strong>Почему врачи отклоняют находки ИИ</strong>
+          <KeyValueTable
+            head={["Причина", "Отклонений"]}
+            rows={Object.entries(d.reject_reasons ?? {})}
+          />
+          <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+            Ложные срабатывания, артефакты и неверный код — разные задачи для следующей
+            версии модели (SR-6). Причину врач выбирает по желанию после отклонения.
+          </div>
+        </div>
+
         <SiteDataReadiness days={weeks * 7} />
       </div>
     </div>

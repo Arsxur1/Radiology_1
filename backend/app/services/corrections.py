@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import uuid
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.audit import AuditAction
@@ -31,6 +32,40 @@ from app.services import audit
 
 class CorrectionError(Exception):
     """Нарушение инварианта захвата правок."""
+
+
+# Причины отклонения находки модели — закрытый список (SR-6). Свободный текст был бы
+# плохим обучающим сигналом и мог бы содержать ФИО; код причины — чистый агрегат.
+REJECT_REASONS: dict[str, str] = {
+    "false_positive": "Находки нет (ложное срабатывание)",
+    "wrong_finding": "Есть другая находка (неверный код)",
+    "wrong_location": "Неверная локализация / контур",
+    "artifact": "Артефакт, укладка, посторонний предмет",
+    "not_significant": "Клинически незначимо",
+    "poor_quality": "Качество снимка не позволяет оценить",
+}
+
+
+def _check_reason(reason: str | None) -> str | None:
+    if reason in (None, ""):
+        return None
+    if reason not in REJECT_REASONS:
+        raise CorrectionError(f"Неизвестная причина отклонения: {reason!r}")
+    return reason
+
+
+def _last_rejection(db: Session, finding_id: uuid.UUID) -> Correction | None:
+    return db.execute(
+        select(Correction)
+        .where(Correction.finding_id == finding_id, Correction.correction_type == CorrectionType.REJECTED)
+        .order_by(Correction.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def reject_reason_of(db: Session, finding_id: uuid.UUID) -> str | None:
+    c = _last_rejection(db, finding_id)
+    return (c.after or {}).get("reject_reason") if c else None
 
 
 def _get_actionable(db: Session, finding_id: uuid.UUID) -> Finding:
@@ -147,6 +182,7 @@ def reject_finding(
     Обучающий сигнал «ложное срабатывание». Также питает контроль дрейфа
     (доля отклонений по срезам, FR-11).
     """
+    reason = _check_reason(reason)
     finding = _get_actionable(db, finding_id)
 
     before = _snapshot(finding)
@@ -166,7 +202,35 @@ def reject_finding(
         physician=physician,
         time_spent_seconds=time_spent_seconds,
         action=AuditAction.FINDING_REJECT,
+        extra={"reject_reason": reason} if reason else None,
     )
+
+
+def set_reject_reason(db: Session, *, finding_id: uuid.UUID, physician: str, reason: str) -> Correction:
+    """Уточнить причину уже отклонённой находки (необязательный второй шаг SR-6).
+
+    Отклонение — одно действие; причина выбирается после, из закрытого списка. Менять
+    её может только тот врач, который отклонил. Каждое уточнение — в журнале аудита.
+    """
+    reason = _check_reason(reason)
+    if reason is None:
+        raise CorrectionError("Причина не указана")
+    finding = db.get(Finding, finding_id)
+    if finding is None:
+        raise CorrectionError("Находка не найдена")
+    correction = _last_rejection(db, finding_id)
+    if finding.confirmation_status != ConfirmationStatus.REJECTED or correction is None:
+        raise CorrectionError("Находка не отклонена")
+    if correction.author != physician:
+        raise CorrectionError("Причину указывает врач, отклонивший находку")
+    correction.after = {**(correction.after or {}), "reject_reason": reason}
+    db.flush()
+    audit.record(
+        db, actor=physician, actor_role="radiologist", action=AuditAction.FINDING_REJECT,
+        entity_type="finding", entity_id=finding.id,
+        details={"reject_reason": reason, "reason_update": True},
+    )
+    return correction
 
 
 def create_physician_finding(
@@ -257,6 +321,7 @@ def _record_correction(
     physician: str,
     time_spent_seconds: float | None,
     action: AuditAction,
+    extra: dict | None = None,
 ) -> Correction:
     correction = Correction(
         finding_id=finding.id,
@@ -281,6 +346,7 @@ def _record_correction(
             "correction_type": correction_type.value,
             "model_version_id": str(_resolve_model_version_id(db, finding) or ""),
             "time_spent_seconds": time_spent_seconds,
+            **(extra or {}),
         },
     )
     return correction

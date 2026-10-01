@@ -41,6 +41,13 @@ export interface FindingOut {
   confirmation_status: ConfirmationStatus;
   has_heatmap: boolean;
   mesh: MeshState | null;
+  /** Код причины отклонения (SR-6), если врач её указал. */
+  reject_reason?: string | null;
+}
+
+export interface RejectReason {
+  code: string;
+  label: string;
 }
 
 /** 3D-модель структуры (FR-5): строится в фоне из подтверждённой маски. */
@@ -251,6 +258,7 @@ export interface PilotDashboard {
     corrections_by_type: Record<string, number>;
   };
   refusal_reasons: Record<string, number>;
+  reject_reasons: Record<string, number>;
   training_data: {
     records: number;
     populations: Record<string, number>;

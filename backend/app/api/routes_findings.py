@@ -39,6 +39,8 @@ class FindingOut(BaseModel):
     has_heatmap: bool = False
     # Состояние 3D-модели (FR-5): queued / ready / failed и статистика; без ссылок на хранилище.
     mesh: dict | None = None
+    # Код причины отклонения (SR-6) — только для отклонённых находок.
+    reject_reason: str | None = None
 
 
 class ConfirmIn(BaseModel):
@@ -54,8 +56,12 @@ class ModifyIn(BaseModel):
 
 
 class RejectIn(BaseModel):
-    reason: str | None = None
+    reason: str | None = None              # код из GET /findings/reject-reasons
     time_spent_seconds: float | None = None
+
+
+class RejectReasonIn(BaseModel):
+    reason: str
 
 
 class CreateFindingIn(BaseModel):
@@ -68,7 +74,8 @@ class CreateFindingIn(BaseModel):
     time_spent_seconds: float | None = None
 
 
-def _out(f: Finding) -> FindingOut:
+def _out(f: Finding, db: Session | None = None) -> FindingOut:
+    rejected = f.confirmation_status.value == "rejected"
     return FindingOut(
         id=f.id,
         series_id=f.series_id,
@@ -80,6 +87,7 @@ def _out(f: Finding) -> FindingOut:
         confirmation_status=f.confirmation_status.value,
         has_heatmap=bool((f.coordinates or {}).get("heatmap_ref")),
         mesh=_mesh_public((f.coordinates or {}).get("mesh")),
+        reject_reason=corrections.reject_reason_of(db, f.id) if rejected and db is not None else None,
     )
 
 
@@ -104,7 +112,7 @@ def list_series_findings(series_id: uuid.UUID, db: Session = Depends(get_db)) ->
     modality = series.modality if series else None
     if not model_results_visible(db, modality):
         rows = [f for f in rows if f.source != FindingSource.MODEL]
-    return [_out(f) for f in rows]
+    return [_out(f, db) for f in rows]
 
 
 def heatmap_ref_for(db: Session, finding_id: uuid.UUID) -> str:
@@ -155,7 +163,7 @@ def confirm(
         db.commit()
     except CorrectionError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
-    return _out(db.get(Finding, finding_id))
+    return _out(db.get(Finding, finding_id), db)
 
 
 @router.post("/{finding_id}/modify", response_model=FindingOut)
@@ -175,7 +183,7 @@ def modify(
         db.commit()
     except CorrectionError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
-    return _out(db.get(Finding, finding_id))
+    return _out(db.get(Finding, finding_id), db)
 
 
 @router.post("/{finding_id}/reject", response_model=FindingOut)
@@ -185,6 +193,8 @@ def reject(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(require_roles(Role.RADIOLOGIST)),
 ) -> FindingOut:
+    if payload.reason and payload.reason not in corrections.REJECT_REASONS:
+        raise HTTPException(status_code=422, detail="Неизвестная причина отклонения")
     try:
         corrections.reject_finding(
             db, finding_id=finding_id, physician=user.subject,
@@ -193,7 +203,36 @@ def reject(
         db.commit()
     except CorrectionError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
-    return _out(db.get(Finding, finding_id))
+    return _out(db.get(Finding, finding_id), db)
+
+
+class RejectReasonOut(BaseModel):
+    code: str
+    label: str
+
+
+@router.get("/reject-reasons", response_model=list[RejectReasonOut])
+def reject_reasons() -> list[RejectReasonOut]:
+    """Закрытый список причин отклонения находки (SR-6)."""
+    return [RejectReasonOut(code=k, label=v) for k, v in corrections.REJECT_REASONS.items()]
+
+
+@router.post("/{finding_id}/reject-reason", response_model=FindingOut)
+def reject_reason(
+    finding_id: uuid.UUID,
+    payload: RejectReasonIn,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_roles(Role.RADIOLOGIST)),
+) -> FindingOut:
+    """Уточнить причину после отклонения в одно действие (необязательно)."""
+    if payload.reason not in corrections.REJECT_REASONS:
+        raise HTTPException(status_code=422, detail="Неизвестная причина отклонения")
+    try:
+        corrections.set_reject_reason(db, finding_id=finding_id, physician=user.subject, reason=payload.reason)
+        db.commit()
+    except CorrectionError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return _out(db.get(Finding, finding_id), db)
 
 
 @router.post("", response_model=FindingOut)

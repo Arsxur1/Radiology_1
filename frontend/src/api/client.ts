@@ -15,6 +15,7 @@ import type {
   OperatingMode,
   PatientOut,
   PilotDashboard,
+  RejectReason,
   SiteDataReport,
   PromotionGateResult,
   RegistrationOut,
@@ -146,11 +147,20 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
-  rejectFinding: (id: string, reason: string, timeSpentSeconds: number) =>
+  // Отклонение — одно действие (SR-6); причина уточняется отдельно и необязательно.
+  rejectFinding: (id: string, timeSpentSeconds: number) =>
     request<FindingOut>(`/findings/${id}/reject`, {
       method: "POST",
-      body: JSON.stringify({ reason, time_spent_seconds: timeSpentSeconds }),
+      body: JSON.stringify({ time_spent_seconds: timeSpentSeconds }),
     }),
+
+  setRejectReason: (id: string, reason: string) =>
+    request<FindingOut>(`/findings/${id}/reject-reason`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  rejectReasons: () => request<RejectReason[]>("/findings/reject-reasons"),
 
   generateReport: (studyId: string, language = "ru") =>
     request<ReportOut>("/reports/generate", {

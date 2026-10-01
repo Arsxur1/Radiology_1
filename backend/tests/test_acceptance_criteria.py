@@ -134,7 +134,7 @@ def test_corrections_recorded_as_training_signal(db):
     )
     from app.models.ml import Correction
 
-    corrections.reject_finding(db, finding_id=outcome.finding_ids[0], physician="dr", reason="ложное")
+    corrections.reject_finding(db, finding_id=outcome.finding_ids[0], physician="dr", reason="false_positive")
     c = db.query(Correction).one()
     assert c.author == "dr"
     assert c.before is not None  # сохранён снимок «было»

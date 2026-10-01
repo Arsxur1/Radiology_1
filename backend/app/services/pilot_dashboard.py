@@ -18,6 +18,7 @@ from app.models.ml import (
     AiRefusal,
     ConfirmationStatus,
     Correction,
+    CorrectionType,
     Finding,
     FindingSource,
     InferenceResult,
@@ -25,6 +26,7 @@ from app.models.ml import (
     ModelVersion,
     Report,
 )
+from app.services.corrections import REJECT_REASONS
 from app.services.finding_vocabulary import by_code
 from app.services.shadow_eval import shadow_report
 from app.services.site_labels import site_manifest
@@ -82,6 +84,12 @@ def build_dashboard(db: Session, *, weeks: int = 12, now: datetime | None = None
     ).scalar_one()
 
     reasons = Counter(_reason_kind(r) for _, rs in refusals for r in (rs or []))
+    # Почему врачи отклоняют находки ИИ (SR-6): ложные срабатывания vs артефакты vs
+    # неверный код — разные задачи для следующей версии модели.
+    rejected = db.execute(select(Correction.after).where(
+        Correction.correction_type == CorrectionType.REJECTED)).scalars().all()
+    reject_reasons = Counter(REJECT_REASONS.get((a or {}).get("reject_reason"), "причина не указана")
+                             for a in rejected)
     manifest_records, manifest_report = site_manifest(db)
 
     shadow_models = db.execute(
@@ -126,6 +134,7 @@ def build_dashboard(db: Session, *, weeks: int = 12, now: datetime | None = None
             "corrections_by_type": dict(sorted(Counter(t.value for _, t in corrections).items())),
         },
         "refusal_reasons": dict(reasons.most_common()),
+        "reject_reasons": dict(reject_reasons.most_common()),
         "training_data": {
             "records": manifest_report["records"],
             "populations": manifest_report["populations"],

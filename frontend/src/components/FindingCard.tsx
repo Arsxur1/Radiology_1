@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
-import type { FindingOut } from "../api/types";
+import type { FindingOut, RejectReason } from "../api/types";
 import { MeshViewer } from "./MeshViewer";
 
 function StatusBadge({ f }: { f: FindingOut }) {
@@ -18,6 +18,65 @@ function StatusBadge({ f }: { f: FindingOut }) {
   if (f.source === "model")
     return <span className="badge badge-model">черновик ИИ — требует подтверждения</span>;
   return <span className="badge badge-physician">добавлено врачом</span>;
+}
+
+// Закрытый список причин — один запрос на страницу, общий для всех карточек.
+let reasonsPromise: Promise<RejectReason[]> | null = null;
+function loadReasons(): Promise<RejectReason[]> {
+  reasonsPromise ??= api.rejectReasons().catch((e) => {
+    reasonsPromise = null;
+    throw e;
+  });
+  return reasonsPromise;
+}
+
+// Необязательный второй шаг после отклонения: почему (обучающий сигнал, SR-6).
+function RejectReasonPicker({ finding, onChange }: { finding: FindingOut; onChange: (f: FindingOut) => void }) {
+  const [reasons, setReasons] = useState<RejectReason[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    loadReasons().then(setReasons).catch((e) => setErr(String(e)));
+  }, []);
+  async function pick(code: string) {
+    setBusy(true);
+    setErr(null);
+    try {
+      onChange(await api.setRejectReason(finding.id, code));
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  const chosen = reasons.find((r) => r.code === finding.reject_reason);
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div className="muted" style={{ fontSize: 13, marginBottom: 4 }}>
+        {chosen ? (
+          <>
+            Причина: <strong>{chosen.label}</strong> (можно изменить)
+          </>
+        ) : (
+          "Почему? (необязательно — помогает улучшить модель)"
+        )}
+      </div>
+      <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+        {reasons.map((r) => (
+          <button
+            key={r.code}
+            disabled={busy || r.code === finding.reject_reason}
+            onClick={() => pick(r.code)}
+            style={{ fontSize: 12, padding: "3px 8px" }}
+            aria-pressed={r.code === finding.reject_reason}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+      {err && <div className="error">Ошибка: {err}</div>}
+    </div>
+  );
 }
 
 // Служебные величины классификатора показываются отдельно, не как измерения.
@@ -215,9 +274,9 @@ export function FindingCard({ finding, onChange }: { finding: FindingOut; onChan
     await act(() => api.modifyFinding(finding.id, { measurements, time_spent_seconds: elapsed() }));
   }
 
+  // Одно действие (SR-6): без диалога; причина — по желанию, кнопками на карточке.
   async function onReject() {
-    const reason = window.prompt("Причина отклонения:") ?? "";
-    await act(() => api.rejectFinding(finding.id, reason, elapsed()));
+    await act(() => api.rejectFinding(finding.id, elapsed()));
   }
 
   return (
@@ -255,6 +314,9 @@ export function FindingCard({ finding, onChange }: { finding: FindingOut; onChan
             Отклонить
           </button>
         </div>
+      )}
+      {finding.source === "model" && finding.confirmation_status === "rejected" && (
+        <RejectReasonPicker finding={finding} onChange={onChange} />
       )}
       {error && <div className="error">Ошибка: {error}</div>}
     </div>
