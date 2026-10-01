@@ -320,10 +320,69 @@ function EvidenceView({ gate }: { gate: PromotionGateResult }) {
   );
 }
 
+// Ответственное действие с обязательным текстом (обоснование, причина). Раньше было окно
+// window.prompt: «Отмена» возвращала пустую строку — и аварийный откат всё равно выполнялся.
+function ReasonForm({
+  title,
+  hint,
+  submit,
+  danger,
+  onSubmit,
+  onCancel,
+}: {
+  title: string;
+  hint: string;
+  submit: string;
+  danger?: boolean;
+  onSubmit: (text: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="card" style={{ margin: "8px 0", padding: 10 }}>
+      <strong>{title}</strong>
+      <div className="muted" style={{ fontSize: 13, margin: "4px 0 6px" }}>
+        {hint}
+      </div>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={3}
+        style={{ width: "100%", boxSizing: "border-box" }}
+        autoFocus
+        disabled={busy}
+      />
+      <div className="row" style={{ gap: 6, marginTop: 6 }}>
+        <button
+          className={danger ? "danger" : "primary"}
+          disabled={busy || text.trim().length < 3}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await onSubmit(text.trim());
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {submit}
+        </button>
+        <button disabled={busy} onClick={onCancel}>
+          Отмена
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void }) {
   const [gate, setGate] = useState<PromotionGateResult | null>(null);
   const [shadow, setShadow] = useState<ShadowReport | SegmentationShadowReport | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const [form, setForm] = useState<"promote" | "rollback" | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   async function guard<T>(fn: () => Promise<T>) {
     setErr(null);
@@ -375,20 +434,25 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
             <button onClick={() => guard(async () => setGate(await api.evaluateModel(model.id)))}>
               Проверить готовность
             </button>
-            <button
-              className="primary"
-              onClick={() =>
-                guard(async () => {
-                  const justification = window.prompt("Обоснование продвижения (обязательно):") ?? "";
-                  if (!justification.trim()) throw new ApiError(400, "Требуется обоснование");
-                  await api.promoteModel(model.id, justification);
-                  setGate(null);
-                })
-              }
-            >
+            <button className="primary" disabled={form !== null} onClick={() => setForm("promote")}>
               Продвинуть в ASSIST
             </button>
           </div>
+          {form === "promote" && (
+            <ReasonForm
+              title="Продвижение в ASSIST"
+              hint="Письменное обоснование обязательно: оно попадает в журнал аудита вместе со свидетельствами гейта."
+              submit="Продвинуть"
+              onCancel={() => setForm(null)}
+              onSubmit={(text) =>
+                guard(async () => {
+                  await api.promoteModel(model.id, text);
+                  setGate(null);
+                  setForm(null);
+                })
+              }
+            />
+          )}
           {shadow &&
             (shadow.task === "segmentation" ? <SegShadowView report={shadow} /> : <ShadowReportView report={shadow} />)}
           {gate && <EvidenceView gate={gate} />}
@@ -401,19 +465,36 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
 
       {(model.status === "active" || model.status === "retired") && (
         <div style={{ marginTop: 8 }}>
-          <button
-            className="danger"
-            onClick={() =>
-              guard(async () => {
-                const reason = window.prompt("Причина отката:") ?? "";
-                await api.rollbackModel(model.id, reason);
-              })
-            }
-          >
+          <button className="danger" disabled={form !== null} onClick={() => setForm("rollback")}>
             {model.status === "active" ? "Откатить (аварийно)" : "Сделать активной (откат)"}
           </button>
+          {form === "rollback" && (
+            <ReasonForm
+              danger
+              title={model.status === "active" ? "Аварийный откат текущей версии" : "Вернуть эту версию"}
+              hint={
+                model.status === "active"
+                  ? "Текущая версия уйдёт в RETIRED, активной станет предыдущая версия этой линейки. Если предыдущей нет — ИИ этой линейки отключится, просмотр и работа врачей продолжатся. Причина — в журнал аудита."
+                  : "Эта версия снова станет активной, текущая активная уйдёт в RETIRED. Причина — в журнал аудита."
+              }
+              submit={model.status === "active" ? "Откатить" : "Сделать активной"}
+              onCancel={() => setForm(null)}
+              onSubmit={(text) =>
+                guard(async () => {
+                  const r = await api.rollbackModel(model.id, text);
+                  setForm(null);
+                  setNotice(
+                    r.active
+                      ? `Активна ${r.active.name} ${r.active.semver}.`
+                      : `ИИ линейки ${model.name} отключён: предыдущей версии нет.`,
+                  );
+                })
+              }
+            />
+          )}
         </div>
       )}
+      {notice && <div className="muted">{notice}</div>}
       {err && <div className="error">Ошибка: {err}</div>}
     </div>
   );

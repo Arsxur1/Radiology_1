@@ -54,6 +54,11 @@ class RollbackIn(BaseModel):
     reason: str
 
 
+class RollbackOut(BaseModel):
+    # Версия, ставшая ACTIVE; None — ИИ этой линейки отключён (предыдущей версии нет).
+    active: ModelOut | None
+
+
 def _out(m: ModelVersion) -> ModelOut:
     return ModelOut(
         id=m.id, name=m.name, semver=m.semver, weights_hash=m.weights_hash,
@@ -196,19 +201,21 @@ def promote(
     return _out(m)
 
 
-@router.post("/{version_id}/rollback", response_model=ModelOut)
+@router.post("/{version_id}/rollback", response_model=RollbackOut)
 def rollback(
     version_id: uuid.UUID,
     payload: RollbackIn,
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(require_roles(Role.ADMIN)),
-) -> ModelOut:
-    """Мгновенный откат к указанной версии (FR-10, п. 6)."""
+) -> RollbackOut:
+    """Мгновенный откат (FR-10, п. 6): к прежней версии или от текущей к предыдущей."""
     try:
         m = model_registry.rollback(
             db, to_version_id=version_id, actor=user.subject, reason=payload.reason,
         )
         db.commit()
-    except PromotionError as e:
+    except model_registry.RollbackNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
-    return _out(m)
+    except PromotionError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return RollbackOut(active=_out(m) if m else None)

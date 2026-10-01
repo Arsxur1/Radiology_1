@@ -218,8 +218,9 @@ export const api = {
       body: JSON.stringify({ justification }),
     }),
 
+  // active: версия, ставшая ACTIVE; null — ИИ этой линейки отключён (предыдущей нет).
   rollbackModel: (versionId: string, reason: string) =>
-    request<ModelOut>(`/models/${versionId}/rollback`, {
+    request<{ active: ModelOut | null }>(`/models/${versionId}/rollback`, {
       method: "POST",
       body: JSON.stringify({ reason }),
     }),

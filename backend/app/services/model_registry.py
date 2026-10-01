@@ -346,21 +346,39 @@ def promote(
     return candidate
 
 
+class RollbackNotFound(PromotionError):
+    """Версия для отката не найдена."""
+
+
 def rollback(
     db: Session,
     *,
     to_version_id: uuid.UUID,
     actor: str,
     reason: str,
-) -> ModelVersion:
-    """Мгновенный откат к предыдущей версии (FR-10, п. 6).
+) -> ModelVersion | None:
+    """Мгновенный откат (FR-10, п. 6). Аварийная операция — без гейта, поэтому строго:
 
-    Текущая ACTIVE-модель уходит в RETIRED, указанная версия становится ACTIVE.
-    Не требует прохождения гейта — это аварийная операция восстановления.
+    - цель RETIRED (версия, которая уже работала и прошла гейт) → она снова ACTIVE,
+      текущая ACTIVE той же линейки уходит в RETIRED;
+    - цель ACTIVE («откатить текущую») → она уходит в RETIRED, а ACTIVE становится
+      предыдущая версия линейки (последняя установленная из RETIRED). Если предыдущей нет,
+      ИИ этой линейки отключается — просмотр и работа врача не зависят от моделей (SR-4);
+    - цель SHADOW запрещена: кандидат становится ACTIVE только через гейт (иначе откат
+      был бы обходом гейта).
+
+    Причина обязательна. Возвращает версию, ставшую ACTIVE, или None (линейка отключена).
     """
+    if not (reason or "").strip():
+        raise PromotionError("Требуется причина отката")
     target = db.get(ModelVersion, to_version_id)
     if target is None:
-        raise PromotionError("Версия для отката не найдена")
+        raise RollbackNotFound("Версия для отката не найдена")
+    if target.status == ModelStatus.SHADOW:
+        raise PromotionError(
+            "Откат возможен только к версии, которая уже работала (RETIRED). "
+            "Кандидат из SHADOW продвигается через гейт."
+        )
 
     current = db.execute(
         select(ModelVersion).where(
@@ -368,10 +386,24 @@ def rollback(
             ModelVersion.status == ModelStatus.ACTIVE,
         )
     ).scalar_one_or_none()
-    if current is not None and current.id != target.id:
-        current.status = ModelStatus.RETIRED
 
-    target.status = ModelStatus.ACTIVE
+    if target.status == ModelStatus.ACTIVE:
+        retired_from = target
+        new_active = db.execute(
+            select(ModelVersion)
+            .where(ModelVersion.name == target.name, ModelVersion.status == ModelStatus.RETIRED,
+                   ModelVersion.id != target.id)
+            .order_by(ModelVersion.installed_at.desc().nulls_last())
+            .limit(1)
+        ).scalar_one_or_none()
+    else:
+        retired_from = current
+        new_active = target
+
+    if retired_from is not None:
+        retired_from.status = ModelStatus.RETIRED
+    if new_active is not None:
+        new_active.status = ModelStatus.ACTIVE
     db.flush()
 
     audit.record(
@@ -380,11 +412,12 @@ def rollback(
         actor_role="admin",
         action=AuditAction.MODEL_PROMOTE,
         entity_type="model_version",
-        entity_id=target.id,
-        details={"event": "rollback", "reason": reason,
-                 "from": str(current.id) if current else None},
+        entity_id=(new_active or target).id,
+        details={"event": "rollback", "reason": reason.strip(),
+                 "from": str(retired_from.id) if retired_from else None,
+                 "to": str(new_active.id) if new_active else None},
     )
-    return target
+    return new_active
 
 
 def models_for(
