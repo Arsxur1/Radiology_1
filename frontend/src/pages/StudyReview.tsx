@@ -113,7 +113,7 @@ export function StudyReview() {
             </p>
           ) : (
             (findings[se.id] ?? []).map((f) => (
-              <FindingCard key={f.id} finding={f} onChange={(u) => onFindingChange(se.id, u)} />
+              <FindingCard key={f.id} finding={f} modality={se.modality} onChange={(u) => onFindingChange(se.id, u)} />
             ))
           )}
           {hasRole("radiologist") && (

@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ApiError, api } from "../api/client";
-import type { FindingOut, RejectReason } from "../api/types";
+import type { FindingOut, RejectReason, VocabularyConcept } from "../api/types";
 import { MeshViewer } from "./MeshViewer";
 
 function StatusBadge({ f }: { f: FindingOut }) {
@@ -75,6 +75,83 @@ function RejectReasonPicker({ finding, onChange }: { finding: FindingOut; onChan
         ))}
       </div>
       {err && <div className="error">Ошибка: {err}</div>}
+    </div>
+  );
+}
+
+// «Изменить» на месте (FR-9): код — выбором из словаря (опечатка в коде = неверная метка
+// обучения), объём — числом. Раньше было окно window.prompt с вводом кода по памяти.
+function ModifyEditor({
+  finding,
+  modality,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  finding: FindingOut;
+  modality?: string;
+  busy: boolean;
+  onSave: (payload: { code?: string; measurements?: Record<string, unknown> }) => void;
+  onCancel: () => void;
+}) {
+  const qualitative = (finding.code ?? "").startsWith("CXR-");
+  const [concepts, setConcepts] = useState<VocabularyConcept[]>([]);
+  const [code, setCode] = useState("");
+  const current = finding.measurements.volume_ml;
+  const [volume, setVolume] = useState(typeof current === "number" ? String(current) : "");
+  useEffect(() => {
+    if (qualitative) api.chestVocabulary(modality ?? "").then(setConcepts).catch(() => setConcepts([]));
+  }, [qualitative, modality]);
+  const groups = new Map<string, VocabularyConcept[]>();
+  for (const c of concepts) if (c.code !== finding.code) groups.set(c.group, [...(groups.get(c.group) ?? []), c]);
+  const vol = Number(volume.replace(",", "."));
+  const volOk = volume.trim() !== "" && Number.isFinite(vol) && vol > 0;
+  return (
+    <div className="card" style={{ margin: "8px 0", padding: 10 }}>
+      {qualitative ? (
+        <label>
+          Верная находка вместо «{finding.label ?? finding.code}»:{" "}
+          <select value={code} onChange={(e) => setCode(e.target.value)} disabled={busy} autoFocus>
+            <option value="">— выберите из словаря —</option>
+            {[...groups.entries()].map(([g, items]) => (
+              <optgroup key={g} label={g}>
+                {items.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label_ru} ({c.code})
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <label>
+          Объём, мл:{" "}
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            inputMode="decimal"
+            value={volume}
+            onChange={(e) => setVolume(e.target.value)}
+            disabled={busy}
+            autoFocus
+            style={{ width: 110 }}
+          />
+        </label>
+      )}
+      <div className="row" style={{ marginTop: 8, gap: 6 }}>
+        <button
+          className="primary"
+          disabled={busy || (qualitative ? !code : !volOk)}
+          onClick={() => onSave(qualitative ? { code } : { measurements: { volume_ml: vol } })}
+        >
+          Сохранить исправление
+        </button>
+        <button disabled={busy} onClick={onCancel}>
+          Отмена
+        </button>
+      </div>
     </div>
   );
 }
@@ -239,39 +316,42 @@ function MeshPanel({ finding, onChange }: { finding: FindingOut; onChange: (f: F
   );
 }
 
-export function FindingCard({ finding, onChange }: { finding: FindingOut; onChange: (f: FindingOut) => void }) {
+export function FindingCard({
+  finding,
+  onChange,
+  modality,
+}: {
+  finding: FindingOut;
+  onChange: (f: FindingOut) => void;
+  modality?: string;
+}) {
   // Момент, когда карточка стала видна врачу — для расчёта затраченного времени.
   const shownAt = useRef<number>(Date.now());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const elapsed = () => (Date.now() - shownAt.current) / 1000;
   const decided = finding.confirmation_status !== "pending";
 
-  async function act(fn: () => Promise<FindingOut>) {
+  async function act(fn: () => Promise<FindingOut>): Promise<boolean> {
     setBusy(true);
     setError(null);
     try {
       onChange(await fn());
+      return true;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : String(e));
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
-  async function onModify() {
-    if ((finding.code ?? "").startsWith("CXR-")) {
-      // Качественная находка ОГК: правка — это замена кода на верный из словаря.
-      const code = window.prompt("Верный код находки из словаря (например, CXR-201):", finding.code ?? "");
-      if (!code || code.trim() === finding.code) return;
-      await act(() => api.modifyFinding(finding.id, { code: code.trim(), time_spent_seconds: elapsed() }));
-      return;
-    }
-    const raw = window.prompt("Новый объём (мл), оставьте пустым чтобы не менять:");
-    if (raw === null) return;
-    const measurements = raw.trim() ? { volume_ml: Number(raw) } : undefined;
-    await act(() => api.modifyFinding(finding.id, { measurements, time_spent_seconds: elapsed() }));
+  async function onModify(payload: { code?: string; measurements?: Record<string, unknown> }) {
+    // При ошибке редактор остаётся открытым — врач видит причину и может исправить.
+    if (await act(() => api.modifyFinding(finding.id, { ...payload, time_spent_seconds: elapsed() })))
+      setEditing(false);
   }
 
   // Одно действие (SR-6): без диалога; причина — по желанию, кнопками на карточке.
@@ -307,13 +387,22 @@ export function FindingCard({ finding, onChange }: { finding: FindingOut; onChan
           >
             Подтвердить
           </button>
-          <button disabled={busy} onClick={onModify}>
+          <button disabled={busy || editing} onClick={() => setEditing(true)}>
             Изменить
           </button>
           <button className="danger" disabled={busy} onClick={onReject}>
             Отклонить
           </button>
         </div>
+      )}
+      {!decided && editing && (
+        <ModifyEditor
+          finding={finding}
+          modality={modality}
+          busy={busy}
+          onSave={onModify}
+          onCancel={() => setEditing(false)}
+        />
       )}
       {finding.source === "model" && finding.confirmation_status === "rejected" && (
         <RejectReasonPicker finding={finding} onChange={onChange} />
