@@ -1,0 +1,231 @@
+{
+  "kind": "external_pediatric",
+  "dataset": "Guangzhou test (1–5 лет)",
+  "citation": "Kermany D., Zhang K., Goldbaum M. Labeled Optical Coherence Tomography (OCT) and Chest X-Ray Images for Classification. Mendeley Data, v2, 2018. doi:10.17632/rscbjbr9sj.2. CC BY 4.0.",
+  "splits": [
+    "test"
+  ],
+  "models": {
+    "densenet121-res224-nih": {
+      "n": {
+        "normal": 234,
+        "pneumonia": 390,
+        "total": 624
+      },
+      "any_finding_auroc": 0.847282,
+      "any_finding_auroc_ci95": [
+        0.8131,
+        0.8817
+      ],
+      "normal_with_any_draft": 0.5171,
+      "normal_mean_drafts": 0.739,
+      "pneumonia_with_any_draft": 0.9769,
+      "bacterial_with_any_draft": null,
+      "viral_with_any_draft": null,
+      "with_any_draft_by_kind": {
+        "normal": 0.5171,
+        "pneumonia": 0.9769
+      },
+      "per_code": {
+        "CXR-100": {
+          "auroc": 0.815637,
+          "draft_rate_normal": 0.0171,
+          "draft_rate_pneumonia": 0.0795,
+          "threshold": 0.55
+        },
+        "CXR-101": {
+          "auroc": 0.75046,
+          "draft_rate_normal": 0.0043,
+          "draft_rate_pneumonia": 0.1128,
+          "threshold": 0.55
+        },
+        "CXR-102": {
+          "auroc": 0.87323,
+          "draft_rate_normal": 0.0299,
+          "draft_rate_pneumonia": 0.1949,
+          "threshold": 0.55
+        },
+        "CXR-103": {
+          "auroc": 0.834933,
+          "draft_rate_normal": 0.0598,
+          "draft_rate_pneumonia": 0.4564,
+          "threshold": 0.55
+        },
+        "CXR-104": {
+          "auroc": 0.827887,
+          "draft_rate_normal": 0.4872,
+          "draft_rate_pneumonia": 0.9359,
+          "threshold": 0.55
+        },
+        "CXR-111": {
+          "auroc": 0.741234,
+          "draft_rate_normal": 0.0128,
+          "draft_rate_pneumonia": 0.0205,
+          "threshold": 0.55
+        },
+        "CXR-114": {
+          "auroc": 0.669603,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.55
+        },
+        "CXR-115": {
+          "auroc": 0.586511,
+          "draft_rate_normal": 0.0043,
+          "draft_rate_pneumonia": 0.0026,
+          "threshold": 0.55
+        },
+        "CXR-200": {
+          "auroc": 0.920546,
+          "draft_rate_normal": 0.0556,
+          "draft_rate_pneumonia": 0.7769,
+          "threshold": 0.55
+        },
+        "CXR-201": {
+          "auroc": 0.887881,
+          "draft_rate_normal": 0.0085,
+          "draft_rate_pneumonia": 0.0923,
+          "threshold": 0.55
+        },
+        "CXR-202": {
+          "auroc": 0.721389,
+          "draft_rate_normal": 0.0513,
+          "draft_rate_pneumonia": 0.1872,
+          "threshold": 0.55
+        },
+        "CXR-500": {
+          "auroc": 0.609774,
+          "draft_rate_normal": 0.0085,
+          "draft_rate_pneumonia": 0.0051,
+          "threshold": 0.55
+        }
+      },
+      "reference_raw_pneumonia_output_auroc": 0.763697,
+      "weights_hash": "31a5475c6b1383a7edbfcaf96af9ce302eb9969cfe28b6b8b5859afc6f274fdf",
+      "seconds": 72.5
+    },
+    "densenet121-res224-all": {
+      "n": {
+        "normal": 234,
+        "pneumonia": 390,
+        "total": 624
+      },
+      "any_finding_auroc": 0.929202,
+      "any_finding_auroc_ci95": [
+        0.9068,
+        0.9502
+      ],
+      "normal_with_any_draft": 0.1966,
+      "normal_mean_drafts": 0.239,
+      "pneumonia_with_any_draft": 0.9308,
+      "bacterial_with_any_draft": null,
+      "viral_with_any_draft": null,
+      "with_any_draft_by_kind": {
+        "normal": 0.1966,
+        "pneumonia": 0.9308
+      },
+      "per_code": {
+        "CXR-100": {
+          "auroc": 0.972365,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0051,
+          "threshold": 0.8885
+        },
+        "CXR-101": {
+          "auroc": 0.750636,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.9249
+        },
+        "CXR-102": {
+          "auroc": 0.964146,
+          "draft_rate_normal": 0.0043,
+          "draft_rate_pneumonia": 0.3179,
+          "threshold": 0.7272
+        },
+        "CXR-103": {
+          "auroc": 0.93879,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.7853
+        },
+        "CXR-104": {
+          "auroc": 0.842428,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.9307
+        },
+        "CXR-111": {
+          "auroc": 0.88432,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.7272
+        },
+        "CXR-112": {
+          "auroc": 0.902575,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0359,
+          "threshold": 0.6789
+        },
+        "CXR-113": {
+          "auroc": 0.93616,
+          "draft_rate_normal": 0.1795,
+          "draft_rate_pneumonia": 0.8872,
+          "threshold": 0.6161
+        },
+        "CXR-114": {
+          "auroc": 0.93398,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0231,
+          "threshold": 0.6871
+        },
+        "CXR-115": {
+          "auroc": 0.783213,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.55
+        },
+        "CXR-200": {
+          "auroc": 0.968551,
+          "draft_rate_normal": 0.0171,
+          "draft_rate_pneumonia": 0.641,
+          "threshold": 0.6127
+        },
+        "CXR-201": {
+          "auroc": 0.932884,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0077,
+          "threshold": 0.6527
+        },
+        "CXR-202": {
+          "auroc": 0.850625,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.6198
+        },
+        "CXR-406": {
+          "auroc": 0.854043,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.849
+        },
+        "CXR-500": {
+          "auroc": 0.88879,
+          "draft_rate_normal": 0.0385,
+          "draft_rate_pneumonia": 0.4487,
+          "threshold": 0.6631
+        },
+        "CXR-602": {
+          "auroc": 0.884835,
+          "draft_rate_normal": 0.0,
+          "draft_rate_pneumonia": 0.0,
+          "threshold": 0.6547
+        }
+      },
+      "reference_raw_pneumonia_output_auroc": 0.790741,
+      "weights_hash": "56524913dd16a906422e8d8b66a7a5c46be1d82eb7ac012d8103776f1aa68899",
+      "seconds": 98.2
+    }
+  },
+  "source": "MedMNIST+ pneumoniamnist_224 (Zenodo 10519652, CC BY 4.0; уменьшено до 224×224 авторами MedMNIST, подтип пневмонии не сохранён); md5 d6a3c71de1b945ea11211b03746c1fe1"
+}

@@ -1,4 +1,5 @@
 {
+  "kind": "external_pediatric",
   "dataset": "HWCMC, Hainan Women and Children's Medical Center (0–14 лет)",
   "citation": "Yu J. The HWCMC dataset. Zenodo, 2024. doi:10.5281/zenodo.13744272. CC BY 4.0.",
   "splits": "весь набор (частей нет)",
@@ -104,6 +105,7 @@
         }
       },
       "reference_raw_pneumonia_output_auroc": 0.675758,
+      "weights_hash": "31a5475c6b1383a7edbfcaf96af9ce302eb9969cfe28b6b8b5859afc6f274fdf",
       "external_calibration_check": {
         "source": "report-calib.json",
         "by_rate": {
@@ -145,7 +147,7 @@
           }
         }
       },
-      "seconds": 884.4
+      "seconds": 1396.1
     },
     "densenet121-res224-all": {
       "n": {
@@ -272,6 +274,7 @@
         }
       },
       "reference_raw_pneumonia_output_auroc": 0.664429,
+      "weights_hash": "56524913dd16a906422e8d8b66a7a5c46be1d82eb7ac012d8103776f1aa68899",
       "external_calibration_check": {
         "source": "report-calib.json",
         "by_rate": {
@@ -313,7 +316,7 @@
           }
         }
       },
-      "seconds": 1333.5
+      "seconds": 957.4
     }
   },
   "source": "Zenodo 13744272 (CC BY 4.0), «Pediatric Pneumonia.rar», md5 1662b0061221966ab07824ef7a365476; 5632 PNG 893×893 RGB"
