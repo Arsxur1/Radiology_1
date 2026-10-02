@@ -13,6 +13,7 @@ import { FindingCard } from "../components/FindingCard";
 import { PacsPriors } from "../components/PacsPriors";
 import { SendToPacs } from "../components/SendToPacs";
 import { PatientIdentity } from "../components/PatientIdentity";
+import { ReportIncident } from "../components/ReportIncident";
 
 export function StudyReview() {
   const { studyId } = useParams<{ studyId: string }>();
@@ -177,6 +178,9 @@ export function StudyReview() {
           примите решение по каждому черновику ИИ.
         </div>
       </section>
+      {hasRole("radiologist", "clinician", "admin") && (
+        <ReportIncident studyId={study.id} findings={Object.values(findings).flat()} />
+      )}
     </div>
   );
 }

@@ -30,6 +30,7 @@ class AuditAction(str, Enum):
     REPORT_FINALIZE = "report_finalize"
     MODEL_PROMOTE = "model_promote"
     EXPORT = "export"
+    INCIDENT = "incident"     # сообщение об инциденте и его разбор
 
 
 class AuditLog(UUIDMixin, Base):

@@ -7,6 +7,7 @@ import { hasOidcSession, logout } from "./oidc";
 import { ModeBanner } from "./components/ModeBanner";
 import { Admin } from "./pages/Admin";
 import { DriftPanel } from "./pages/DriftPanel";
+import { Incidents } from "./pages/Incidents";
 import { AuditLog } from "./pages/AuditLog";
 import { AuthCallback } from "./pages/AuthCallback";
 import { Login } from "./pages/Login";
@@ -49,6 +50,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           {hasRole("admin", "auditor") && <Link to="/pilot">Пилот</Link>}
           {hasRole("admin", "auditor") && <Link to="/drift">Дрейф</Link>}
           {hasRole("admin", "auditor") && <Link to="/audit">Журнал</Link>}
+          {hasRole("admin", "auditor", "radiologist", "clinician") && <Link to="/incidents">Инциденты</Link>}
           <button
             onClick={() => {
               // Сеанс Keycloak завершается на сервере входа; иначе — локальный выход.
@@ -147,6 +149,14 @@ export default function App() {
         element={
           <RequireAuth>
             <Patients />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/incidents"
+        element={
+          <RequireAuth>
+            <Incidents />
           </RequireAuth>
         }
       />

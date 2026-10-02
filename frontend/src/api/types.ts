@@ -280,6 +280,7 @@ export interface PilotDashboard {
   };
   refusal_reasons: Record<string, number>;
   reject_reasons: Record<string, number>;
+  incidents?: IncidentSummary;
   training_data: {
     records: number;
     populations: Record<string, number>;
@@ -376,4 +377,39 @@ export interface SiteDataReport {
   min_description_count: number;
   issues: string[];
   ready: boolean;
+}
+
+// ── Журнал инцидентов (ТЗ, раздел 9 п. 7) ─────────────────────────────────
+export type IncidentStatus = "new" | "investigating" | "closed";
+
+export interface IncidentOut {
+  id: string;
+  created_at: string;
+  reported_by: string;
+  reporter_role: string | null;
+  kind: string;
+  kind_label: string;
+  severity: string;
+  severity_label: string;
+  status: IncidentStatus;
+  study_id: string | null;
+  finding_id: string | null;
+  model_version_id: string | null;
+  description: string;
+  resolution: string | null;
+  closed_by: string | null;
+  closed_at: string | null;
+}
+
+export interface IncidentKinds {
+  kinds: { value: string; label: string }[];
+  severities: { value: string; label: string }[];
+}
+
+export interface IncidentSummary {
+  total: number;
+  open: number;
+  open_serious: number;
+  by_kind: Record<string, number>;
+  by_status: Record<string, number>;
 }

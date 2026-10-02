@@ -13,6 +13,7 @@ from app.api import (
     routes_classification,
     routes_findings,
     routes_health,
+    routes_incidents,
     routes_learning,
     routes_models,
     routes_modes,
@@ -74,6 +75,7 @@ app.include_router(routes_registration.router, dependencies=_AUTH)
 app.include_router(routes_vocabulary.router, dependencies=_AUTH)
 app.include_router(routes_pilot.router, dependencies=_AUTH)
 app.include_router(routes_system.router, dependencies=_AUTH)
+app.include_router(routes_incidents.router, dependencies=_AUTH)
 
 
 @app.get("/")

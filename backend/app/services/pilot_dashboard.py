@@ -28,6 +28,7 @@ from app.models.ml import (
 )
 from app.services.corrections import REJECT_REASONS
 from app.services.finding_vocabulary import by_code
+from app.services.incidents import summary as incident_summary
 from app.services.shadow_eval import shadow_report
 from app.services.site_labels import site_manifest
 
@@ -133,6 +134,7 @@ def build_dashboard(db: Session, *, weeks: int = 12, now: datetime | None = None
             "acceptance_rate": drafts.get(ConfirmationStatus.CONFIRMED.value, 0) / decided if decided else None,
             "corrections_by_type": dict(sorted(Counter(t.value for _, t in corrections).items())),
         },
+        "incidents": incident_summary(db),
         "refusal_reasons": dict(reasons.most_common()),
         "reject_reasons": dict(reject_reasons.most_common()),
         "training_data": {

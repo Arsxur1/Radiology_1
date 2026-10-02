@@ -1,5 +1,6 @@
 // Сводная панель пилота NCMC: видимый прогресс без данных пациентов (только агрегаты).
 
+import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { ApiError, api } from "../api/client";
 import type { PilotDashboard as Dashboard } from "../api/types";
@@ -267,6 +268,22 @@ export function PilotDashboard() {
             версии модели (SR-6). Причину врач выбирает по желанию после отклонения.
           </div>
         </div>
+
+        {d.incidents && (
+          <div className="card">
+            <div className="row spread">
+              <strong>Инциденты</strong>
+              <Link to="/incidents">журнал →</Link>
+            </div>
+            <div className="muted" style={{ margin: "4px 0 8px" }}>
+              всего {d.incidents.total}; открыто {d.incidents.open}
+              {d.incidents.open_serious > 0 && (
+                <b style={{ color: "#e05d5d" }}> · серьёзных открыто: {d.incidents.open_serious}</b>
+              )}
+            </div>
+            <KeyValueTable head={["Вид", "Сообщений"]} rows={Object.entries(d.incidents.by_kind)} />
+          </div>
+        )}
 
         <SiteDataReadiness days={weeks * 7} />
       </div>

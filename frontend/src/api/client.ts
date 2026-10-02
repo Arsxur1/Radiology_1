@@ -8,6 +8,9 @@ import type {
   DriftSlice,
   FindingOut,
   IdentityOut,
+  IncidentKinds,
+  IncidentOut,
+  IncidentStatus,
   PriorOut,
   SystemStatusOut,
   ModeOut,
@@ -109,6 +112,23 @@ export const api = {
     request<FindingOut>("/findings", { method: "POST", body: JSON.stringify({ measurements: {}, ...payload }) }),
 
   systemStatus: () => request<SystemStatusOut>("/system/status"),
+
+  // ── Инциденты ────────────────────────────────────────────────────────────
+  incidentKinds: () => request<IncidentKinds>("/incidents/kinds"),
+  reportIncident: (payload: {
+    kind: string;
+    severity: string;
+    description: string;
+    study_id?: string | null;
+    finding_id?: string | null;
+  }) => request<IncidentOut>("/incidents", { method: "POST", body: JSON.stringify(payload) }),
+  listIncidents: (status?: IncidentStatus) =>
+    request<IncidentOut[]>(status ? `/incidents?status=${status}` : "/incidents"),
+  updateIncident: (id: string, status: IncidentStatus, resolution?: string) =>
+    request<IncidentOut>(`/incidents/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, resolution: resolution || null }),
+    }),
 
   pilotDashboard: (weeks = 12) => request<PilotDashboard>(`/pilot/dashboard?weeks=${weeks}`),
   siteData: (days = 90) => request<SiteDataReport>(`/pilot/site-data?days=${days}`),

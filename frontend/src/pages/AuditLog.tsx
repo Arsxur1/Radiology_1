@@ -16,6 +16,7 @@ const ACTIONS: Record<string, string> = {
   report_finalize: "подпись заключения",
   model_promote: "модели",
   export: "выгрузка данных",
+  incident: "инцидент",
 };
 
 const PAGE = 100;

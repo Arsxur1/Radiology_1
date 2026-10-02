@@ -21,6 +21,7 @@ const NAMES: Record<string, string> = {
   workers: "Воркеры анализа",
   models: "Действующие модели",
   backup: "Резервная копия",
+  incidents: "Инциденты (серьёзные открытые)",
 };
 const FUNCS: [string, string][] = [
   ["viewer", "Просмотр"],

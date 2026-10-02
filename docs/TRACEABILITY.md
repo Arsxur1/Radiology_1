@@ -33,6 +33,7 @@
 | `audit_log` | `models/audit.py::AuditLog` (append-only, хеш-цепочка) |
 | `data_drift_metric` | `models/drift.py::DataDriftMetric` |
 | `operating_mode` | `models/audit.py::OperatingModeState` |
+| `incident` | `models/incident.py::Incident` — журнал инцидентов (ТЗ, раздел 9 п. 7; миграция 0016): вид и тяжесть из закрытых списков, привязка к обезличенным исследованию, находке и версии модели (определяется по находке), статус «новый → на разборе → закрыт» с обязательным выводом; `services/incidents.py`, `api/routes_incidents.py` (сообщают врач/клиницист/админ, закрывает админ, аудитор видит всё), аудит `INCIDENT` без текста описания; открытые серьёзные — предупреждение в «Состоянии системы» и сводка в «Пилоте»; UI `components/ReportIncident.tsx`, `pages/Incidents.tsx` — `test_incidents.py` |
 
 ## Функциональные требования (раздел 6) — статус на этапе 1
 
