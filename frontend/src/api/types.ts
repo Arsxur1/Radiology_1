@@ -155,6 +155,17 @@ export interface PromotionEvidence {
   slice_problems: string[];
   notes: string[];
   active_model: string | null;
+  /** Внешние детские проверки (открытые наборы): название набора → сводка. */
+  external_tests?: Record<
+    string,
+    {
+      n?: { total?: number } | null;
+      any_finding_auroc?: number | null;
+      any_finding_auroc_ci95?: [number, number] | null;
+      normal_with_any_draft?: number | null;
+      pneumonia_with_any_draft?: number | null;
+    }
+  >;
   /** Происхождение обучающих данных и право на коммерческое применение. */
   data_provenance?: {
     training_data: string[];

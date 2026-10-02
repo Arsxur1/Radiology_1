@@ -130,6 +130,23 @@ def frozen_evaluation(
     return frozen
 
 
+@router.post("/{candidate_id}/external-evaluation")
+def external_evaluation(
+    candidate_id: uuid.UUID,
+    report: dict,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_roles(Role.ADMIN)),
+) -> dict:
+    """Загрузить отчёт внешней детской проверки. Принимается только для весов этой модели."""
+    candidate = _candidate_or_404(db, candidate_id)
+    try:
+        result = model_registry.record_external_evaluation(db, candidate, report, actor=user.subject)
+    except model_registry.EvidenceError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    db.commit()
+    return result
+
+
 @router.get("/{version_id}/shadow-report")
 def shadow_report(
     version_id: uuid.UUID,

@@ -212,6 +212,12 @@ export const api = {
       body: JSON.stringify(result),
     }),
 
+  externalEvaluation: (candidateId: string, report: unknown) =>
+    request<Record<string, unknown>>(`/models/${candidateId}/external-evaluation`, {
+      method: "POST",
+      body: JSON.stringify(report),
+    }),
+
   promoteModel: (candidateId: string, justification: string) =>
     request<ModelOut>(`/models/${candidateId}/promote`, {
       method: "POST",

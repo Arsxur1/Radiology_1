@@ -240,14 +240,26 @@ function ModesSection() {
   );
 }
 
-function FrozenUpload({ modelId, onDone }: { modelId: string; onDone: () => void }) {
+// Загрузка свидетельства (JSON с метриками, без изображений); сервер принимает его,
+// только если оно посчитано на весах именно этой модели.
+function JsonEvidenceUpload({
+  label,
+  hint,
+  send,
+  onDone,
+}: {
+  label: string;
+  hint: React.ReactNode;
+  send: (payload: unknown) => Promise<unknown>;
+  onDone: () => void;
+}) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  async function send() {
+  async function submit() {
     setErr(null);
     try {
-      await api.frozenEvaluation(modelId, JSON.parse(text));
+      await send(JSON.parse(text));
       setOpen(false);
       setText("");
       onDone();
@@ -255,22 +267,54 @@ function FrozenUpload({ modelId, onDone }: { modelId: string; onDone: () => void
       setErr(e instanceof ApiError ? e.message : e instanceof SyntaxError ? "Это не JSON" : String(e));
     }
   }
-  if (!open) return <button onClick={() => setOpen(true)}>Загрузить результат замороженного теста</button>;
+  if (!open) return <button onClick={() => setOpen(true)}>{label}</button>;
   return (
     <div style={{ marginTop: 6 }}>
       <div className="muted" style={{ fontSize: 12 }}>
-        Вставьте JSON, который выдал <code>cli evaluate</code> на обучающем сервере (только метрики, без
-        изображений). Принимается, только если посчитан на весах этой модели.
+        {hint}
       </div>
       <textarea rows={5} style={{ width: "100%" }} value={text} onChange={(e) => setText(e.target.value)} />
       <div className="row">
-        <button className="primary" onClick={send} disabled={!text.trim()}>
+        <button className="primary" onClick={submit} disabled={!text.trim()}>
           Сохранить
         </button>
         <button onClick={() => setOpen(false)}>Отмена</button>
       </div>
       {err && <div className="error">{err}</div>}
     </div>
+  );
+}
+
+function FrozenUpload({ modelId, onDone }: { modelId: string; onDone: () => void }) {
+  return (
+    <JsonEvidenceUpload
+      label="Загрузить результат замороженного теста"
+      hint={
+        <>
+          Вставьте JSON, который выдал <code>cli evaluate</code> на обучающем сервере (только метрики, без
+          изображений). Принимается, только если посчитан на весах этой модели.
+        </>
+      }
+      send={(p) => api.frozenEvaluation(modelId, p)}
+      onDone={onDone}
+    />
+  );
+}
+
+function ExternalUpload({ modelId, onDone }: { modelId: string; onDone: () => void }) {
+  return (
+    <JsonEvidenceUpload
+      label="Загрузить внешнюю детскую проверку"
+      hint={
+        <>
+          Вставьте JSON из <code>scripts/eval_pediatric_cxr.py</code> (открытые детские наборы, только агрегаты).
+          Не блокирует продвижение — показывает переносимость на детей другой больницы
+          (docs/VALIDATSIYA-DETI.md).
+        </>
+      }
+      send={(p) => api.externalEvaluation(modelId, p)}
+      onDone={onDone}
+    />
   );
 }
 
@@ -299,6 +343,20 @@ function EvidenceView({ gate }: { gate: PromotionGateResult }) {
             <td>Аппараты и возрастные группы</td>
             <td>{e.no_regression_on_new_devices ? "без деградации" : "есть деградация"}</td>
           </tr>
+          {Object.entries(e.external_tests ?? {}).map(([name, x]) => (
+            <tr key={name}>
+              <td>Внешний детский тест</td>
+              <td>
+                {name}: AUROC {x.any_finding_auroc?.toFixed(2) ?? "—"}
+                {x.any_finding_auroc_ci95 ? ` [${x.any_finding_auroc_ci95[0]}–${x.any_finding_auroc_ci95[1]}]` : ""}; черновик у{" "}
+                {x.normal_with_any_draft === null || x.normal_with_any_draft === undefined
+                  ? "—"
+                  : `${Math.round(x.normal_with_any_draft * 100)}%`}{" "}
+                здоровых, у {x.pneumonia_with_any_draft == null ? "—" : `${Math.round(x.pneumonia_with_any_draft * 100)}%`} с пневмонией
+                {x.n?.total ? <span className="muted"> (n = {x.n.total})</span> : null}
+              </td>
+            </tr>
+          ))}
           {e.data_provenance && (
             <tr>
               <td>Обучающие данные</td>
@@ -435,7 +493,8 @@ function ModelRow({ model, onChanged }: { model: ModelOut; onChanged: () => void
             Свидетельства для продвижения платформа собирает сама: замороженный тест, теневой прогон
             против подписанных заключений, срезы по аппаратам и возрастным группам.
           </div>
-          <FrozenUpload modelId={model.id} onDone={() => setGate(null)} />
+          <FrozenUpload modelId={model.id} onDone={() => setGate(null)} />{" "}
+          <ExternalUpload modelId={model.id} onDone={() => setGate(null)} />
           <div className="row" style={{ marginTop: 8 }}>
             <button
               onClick={() =>

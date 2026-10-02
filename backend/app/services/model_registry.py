@@ -152,6 +152,38 @@ def record_frozen_evaluation(db: Session, model: ModelVersion, result: dict, *, 
     return frozen
 
 
+# Ниже этого AUROC на внешнем детском наборе — пометка «слабая переносимость» в свидетельствах.
+EXTERNAL_AUROC_WEAK = 0.70
+
+
+def record_external_evaluation(db: Session, model: ModelVersion, report: dict, *, actor: str) -> dict:
+    """Сохранить внешнюю проверку на открытом детском наборе (scripts/eval_pediatric_cxr.py).
+
+    Принимается только результат для весов этой модели (weights_hash из отчёта = модели).
+    Не блокирует гейт: показывает, как модель переносится на детей другой больницы
+    (docs/VALIDATSIYA-DETI.md); решение о ASSIST — по свидетельствам площадки.
+    """
+    if report.get("kind") != "external_pediatric" or not isinstance(report.get("models"), dict):
+        raise EvidenceError("Это не отчёт внешней детской проверки (scripts/eval_pediatric_cxr.py)")
+    entry = next((m for m in report["models"].values() if m.get("weights_hash") == model.weights_hash), None)
+    if entry is None:
+        raise EvidenceError("В отчёте нет результата для весов этой модели (weights_hash не совпадает)")
+    dataset = str(report.get("dataset") or "внешний набор")
+    keep = ("n", "any_finding_auroc", "any_finding_auroc_ci95", "normal_with_any_draft",
+            "pneumonia_with_any_draft", "with_any_draft_by_kind")
+    result = {k: entry.get(k) for k in keep} | {
+        "dataset": dataset, "citation": report.get("citation"), "source": report.get("source"),
+        "recorded_at": datetime.now(UTC).isoformat()}
+    external = {**(model.evidence or {}).get("external_tests", {}), dataset: result}
+    model.evidence = {**(model.evidence or {}), "external_tests": external}
+    db.flush()
+    audit.record(db, actor=actor, actor_role="admin", action=AuditAction.MODEL_PROMOTE,
+                 entity_type="model_version", entity_id=model.id,
+                 details={"event": "external_evaluation", "dataset": dataset,
+                          "auroc": result["any_finding_auroc"], "n": (result["n"] or {}).get("total")})
+    return result
+
+
 def _slice_problems(slices: dict, kind: str, c: PromotionCriteria) -> list[str]:
     out = []
     for name, v in (slices or {}).items():
@@ -212,6 +244,16 @@ def collect_evidence(db: Session, candidate: ModelVersion, criteria: PromotionCr
         rate = None
     problems = _slice_problems(manufacturers, "Аппарат", c) + \
         _slice_problems(report.get("per_age_group", {}), "Возрастная группа", c)
+    external = (candidate.evidence or {}).get("external_tests") or {}
+    for name, ext in external.items():
+        auroc_ext, normal_rate = ext.get("any_finding_auroc"), ext.get("normal_with_any_draft")
+        if auroc_ext is None:
+            continue
+        note = (f"Внешний детский тест «{name}»: AUROC {auroc_ext:.2f}"
+                + (f", черновик у {normal_rate:.0%} здоровых детей" if normal_rate is not None else ""))
+        if auroc_ext < EXTERNAL_AUROC_WEAK:
+            note += " — слабая переносимость на детей другой больницы: решение только по данным площадки"
+        notes.append(note)
     provenance = data_provenance.assess(candidate.adapter, (candidate.evidence or {}).get("training_data"))
     if provenance["commercial"] == "unknown":
         notes.append("Право на коммерческое применение не подтверждено: " + "; ".join(provenance["unverified"])
@@ -226,6 +268,7 @@ def collect_evidence(db: Session, candidate: ModelVersion, criteria: PromotionCr
         "notes": notes,
         "active_model": f"{active.name}@{active.semver}" if active else None,
         "data_provenance": provenance,
+        "external_tests": external,
     }
 
 

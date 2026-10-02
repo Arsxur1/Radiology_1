@@ -58,7 +58,7 @@ def main() -> None:
         raise SystemExit(f"Снимков не найдено в {a.data} ({a.splits})")
     torch.set_num_threads(4)
     p_name = a.dataset_name
-    report = {"dataset": p_name,
+    report = {"kind": "external_pediatric", "dataset": p_name,
               "citation": a.citation or CITATION, "splits": a.splits, "models": {},
               "source": "MedMNIST+ pneumoniamnist_224 (Zenodo 10519652, CC BY 4.0; уменьшено до 224×224 "
                         "авторами MedMNIST, подтип пневмонии не сохранён)" if a.npz else f"папка {Path(a.data).name}"}
@@ -67,6 +67,12 @@ def main() -> None:
     for weights in a.weights:
         info = xrv.models.model_urls[weights]
         model = xrv.models.DenseNet(weights=weights).eval()
+        # Хеш файла весов — тот же, что у кандидата в платформе (xrv_candidate): по нему
+        # отчёт принимается как свидетельство именно для этой модели.
+        from app.training.model_card import weights_sha256
+
+        wfile = Path(xrv.utils.get_cache_dir()) / info["weights_url"].split("/")[-1]
+        weights_hash = weights_sha256(wfile) if wfile.exists() else None
         pathologies = list(model.pathologies)
         codes = xrv_code_map(pathologies)
         thresholds = xrv_thresholds(pathologies, [float(x) for x in info["ppv80_thres"]]
@@ -99,6 +105,7 @@ def main() -> None:
 
         records = infer(images, "оценка")
         summary = summarize(records, thresholds, bootstrap=a.bootstrap)
+        summary["weights_hash"] = weights_hash
         if calib_images:
             calib = infer(calib_images, "подбор")
             summary["normal_floor_calibration"] = {
