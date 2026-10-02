@@ -17,8 +17,8 @@ if [ -f "$SRC/SHA256SUMS" ]; then
   ( cd "$SRC" && sha256sum --quiet -c SHA256SUMS ) || { echo "Контрольные суммы не сошлись — копия повреждена" >&2; exit 1; }
   echo "Контрольные суммы сошлись"
 fi
-if { [ -f "$SRC/medviz_idmap.sql.gz.enc" ] || [ -f "$SRC/keycloak.sql.gz.enc" ]; } && [ -z "$KEY" ]; then
-  echo "Копия идентифицирующего контура зашифрована: укажите BACKUP_ENCRYPT_KEY_FILE" >&2; exit 1
+if { [ -f "$SRC/medviz_idmap.sql.gz.enc" ] || [ -f "$SRC/keycloak.sql.gz.enc" ] || [ -f "$SRC/medviz.sql.gz.enc" ]; } && [ -z "$KEY" ]; then
+  echo "Копия зашифрована: укажите BACKUP_ENCRYPT_KEY_FILE" >&2; exit 1
 fi
 [ "${2:-}" = "--yes" ] || { read -r -p "Данные будут перезаписаны из $SRC. Продолжить? [yes/N] " a; [ "$a" = "yes" ]; }
 S3_SYNC="${S3_SYNC_CMD:-docker compose run --rm -T -v $SRC:/backup backend python scripts/s3_sync.py}"
@@ -36,7 +36,11 @@ recreate postgres "$PGU" "$PGD"
 # Роль аудита (append-only, SR-8) — роли в pg_dump не входят.
 docker compose exec -T postgres psql -q -U "$PGU" -d "$PGD" -c \
   "DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'medviz_audit') THEN CREATE ROLE medviz_audit LOGIN; END IF; END \$\$;"
-gunzip -c "$SRC/medviz.sql.gz" | docker compose exec -T postgres psql -q -v ON_ERROR_STOP=1 -U "$PGU" -d "$PGD" >/dev/null
+if [ -f "$SRC/medviz.sql.gz.enc" ]; then
+  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass "file:$KEY" -in "$SRC/medviz.sql.gz.enc" | gunzip -c
+else
+  gunzip -c "$SRC/medviz.sql.gz"
+fi | docker compose exec -T postgres psql -q -v ON_ERROR_STOP=1 -U "$PGU" -d "$PGD" >/dev/null
 
 echo "→ PostgreSQL (идентифицирующий контур)"
 recreate postgres-idmap "$IDU" "$IDD"

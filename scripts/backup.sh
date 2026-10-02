@@ -27,8 +27,13 @@ S3_SYNC="${S3_SYNC_CMD:-docker compose run --rm -T -v $DEST:/backup backend pyth
 S3_DIR="${S3_SYNC_CMD:+$DEST/s3}"; S3_DIR="${S3_DIR:-/backup/s3}"
 
 echo "→ PostgreSQL (доверенный контур)"
-docker compose exec -T postgres pg_dump -U "${POSTGRES_USER:-medviz}" "${POSTGRES_DB:-medviz}" \
-  | gzip > "$DEST/medviz.sql.gz"
+# Псевдонимизированные данные — тоже персональные по закону: при наличии ключа шифруются.
+dump_trusted() { docker compose exec -T postgres pg_dump -U "${POSTGRES_USER:-medviz}" "${POSTGRES_DB:-medviz}" | gzip; }
+if [ -n "$KEY" ]; then
+  dump_trusted | openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass "file:$KEY" > "$DEST/medviz.sql.gz.enc"
+else
+  dump_trusted > "$DEST/medviz.sql.gz"
+fi
 
 echo "→ PostgreSQL (идентифицирующий контур)"
 dump_idmap() {
