@@ -132,3 +132,41 @@ def test_api_ignores_client_numbers_and_records_evidence(db, monkeypatch):
         assert row.details["evidence"]["shadow_reviewed_cases"] == 5
     finally:
         app.dependency_overrides.clear()
+
+
+def _miss_cases(db, mv, n, *, age=5.0, prefix="m"):
+    """Модель ставит CXR-200, а врач находит CXR-200 и ещё CXR-104, которую модель пропустила."""
+    for i in range(n):
+        s = _series(db, uid=f"{prefix}{i}", age=age)
+        classification.classify_series(db, series=s, model_version=mv, model=FixedModel(PROBS))
+        for code in ("CXR-200", "CXR-104"):
+            corrections.create_physician_finding(db, series_id=s.id, physician="dr", measurements={}, code=code)
+        _finalize(db, s)
+
+
+def test_high_miss_rate_blocks_even_without_false_drafts(db):
+    """Черновики модели все верны (расхождений 0 %), но половину находок врача она пропускает."""
+    mv = _model(db, status=ModelStatus.SHADOW)
+    model_registry.record_frozen_evaluation(db, mv, _frozen(), actor="admin")
+    _miss_cases(db, mv, 6)
+    gate, ev = model_registry.gate_for(db, mv, SMALL)
+    assert ev["shadow_rejection_rate"] == 0 and ev["shadow_miss_rate"] == pytest.approx(0.5)
+    assert not gate.ok
+    assert any("Доля пропусков модели" in r for r in gate.reasons)
+    assert any("Возрастная группа «5–12 лет»: доля пропусков 50%" in r for r in gate.reasons)
+    # Порог согласуется с врачами: при допустимых 60 % тот же кандидат проходит.
+    assert model_registry.gate_for(db, mv, PromotionCriteria(min_shadow_cases=4, min_slice_cases=2,
+                                                             max_miss_rate=0.6))[0].ok
+
+
+def test_unassessed_sensitivity_blocks(db):
+    """Врач ни разу не нашёл ничего из словаря модели — чувствительность не оценить, продвигать нельзя."""
+    mv = _model(db, status=ModelStatus.SHADOW)
+    model_registry.record_frozen_evaluation(db, mv, _frozen(), actor="admin")
+    for i in range(5):
+        s = _series(db, uid=f"n{i}")
+        classification.classify_series(db, series=s, model_version=mv, model=FixedModel({"CXR-000": 0.9}))
+        _finalize(db, s)
+    gate, ev = model_registry.gate_for(db, mv, SMALL)
+    assert ev["shadow_miss_unassessed"] is True and not gate.ok
+    assert any("Пропуски модели не оценены" in r for r in gate.reasons)

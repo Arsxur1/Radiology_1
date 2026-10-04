@@ -151,6 +151,9 @@ export interface PromotionEvidence {
   frozen_test_cases: number;
   frozen_test_superior: boolean;
   shadow_rejection_rate: number | null;
+  /** Доля находок врача, пропущенных моделью (по кодам модели); null — не оценена. */
+  shadow_miss_rate?: number | null;
+  shadow_miss_unassessed?: boolean;
   shadow_reviewed_cases: number;
   no_regression_on_new_devices: boolean;
   slice_problems: string[];

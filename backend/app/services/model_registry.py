@@ -68,6 +68,9 @@ class PromotionCriteria:
     min_frozen_test_cases: int = 100          # объём замороженного теста
     require_no_regression_new_devices: bool = True  # раздел 9, п. 3
     max_rejection_rate: float = 0.15          # доля отклонений врачом в теневом прогоне
+    # Доля находок врача, пропущенных моделью (теневой прогон, по кодам модели). Без этого
+    # условия гейт прошла бы модель, которая почти ничего не находит, но и не ошибается.
+    max_miss_rate: float = 0.30
     require_candidate_superior: bool = True   # превосходство на замороженном тесте
     min_shadow_cases: int = 100               # проверенных врачом случаев в теневом прогоне
     min_slice_cases: int = 20                 # срез (аппарат, возраст) оценивается от стольких случаев
@@ -81,6 +84,7 @@ def evaluate_promotion(
     shadow_rejection_rate: float | None,
     no_regression_on_new_devices: bool,
     criteria: PromotionCriteria | None = None,
+    shadow_miss_rate: float | None = None,
 ) -> PromotionGate:
     """Чистая проверка условий продвижения (шаг 6). Тестируемо без БД.
 
@@ -115,6 +119,13 @@ def evaluate_promotion(
         reasons.append(
             f"Доля отклонений в теневом прогоне {shadow_rejection_rate:.2%} "
             f"> порога {c.max_rejection_rate:.2%}"
+        )
+
+    # Теневой прогон: пропуски модели (ложноотрицательные относительно подписанных заключений).
+    if shadow_miss_rate is not None and shadow_miss_rate > c.max_miss_rate:
+        reasons.append(
+            f"Доля пропусков модели в теневом прогоне {shadow_miss_rate:.2%} "
+            f"> порога {c.max_miss_rate:.2%}"
         )
 
     # Раздел 9, п. 3: отсутствие деградации на аппаратах вне обучения.
@@ -190,8 +201,12 @@ def _slice_problems(slices: dict, kind: str, c: PromotionCriteria) -> list[str]:
         rate = v.get("disagreement_rate")
         if rate is None and v.get("within_tolerance") is not None:   # сегментация: объём вне допуска
             rate = 1 - v["within_tolerance"]
-        if v.get("cases", v.get("n", 0)) >= c.min_slice_cases and rate is not None and rate > c.max_rejection_rate:
+        enough = v.get("cases", v.get("n", 0)) >= c.min_slice_cases
+        if enough and rate is not None and rate > c.max_rejection_rate:
             out.append(f"{kind} «{name}»: доля расхождений {rate:.0%} > {c.max_rejection_rate:.0%}")
+        miss = v.get("miss_rate")
+        if enough and miss is not None and miss > c.max_miss_rate:
+            out.append(f"{kind} «{name}»: доля пропусков {miss:.0%} > {c.max_miss_rate:.0%}")
     return out
 
 
@@ -234,14 +249,19 @@ def collect_evidence(db: Session, candidate: ModelVersion, criteria: PromotionCr
         report = segmentation_shadow_report(db, candidate.id)
         reviewed = report["compared_series"]
         manufacturers: dict = {}
+        miss_rate, miss_unassessed = None, False       # у сегментации — допуск объёма, не пропуски
     else:
         report = shadow_report(db, candidate.id)
         reviewed = report["reviewed_cases"]
         manufacturers = report["per_manufacturer"]
+        miss_rate = report.get("miss_rate")
+        # Находок врача по кодам модели нет — чувствительность не оценить, продвигать нельзя.
+        miss_unassessed = miss_rate is None
     rate = report["disagreement_rate"]
     if reviewed < c.min_shadow_cases:
         notes.append(f"Теневой прогон: проверено врачом {reviewed} < {c.min_shadow_cases} случаев")
-        rate = None
+        rate = miss_rate = None
+        miss_unassessed = False
     problems = _slice_problems(manufacturers, "Аппарат", c) + \
         _slice_problems(report.get("per_age_group", {}), "Возрастная группа", c)
     external = (candidate.evidence or {}).get("external_tests") or {}
@@ -262,6 +282,8 @@ def collect_evidence(db: Session, candidate: ModelVersion, criteria: PromotionCr
         "frozen_test_cases": int(frozen.get("n") or 0),
         "frozen_test_superior": superior,
         "shadow_rejection_rate": rate,
+        "shadow_miss_rate": miss_rate,
+        "shadow_miss_unassessed": miss_unassessed,
         "shadow_reviewed_cases": reviewed,
         "no_regression_on_new_devices": not problems,
         "slice_problems": problems,
@@ -280,12 +302,16 @@ def gate_for(db: Session, candidate: ModelVersion, criteria: PromotionCriteria |
         candidate_status=candidate.status, frozen_test_cases=ev["frozen_test_cases"],
         frozen_test_superior=ev["frozen_test_superior"], shadow_rejection_rate=ev["shadow_rejection_rate"],
         no_regression_on_new_devices=ev["no_regression_on_new_devices"], criteria=c,
+        shadow_miss_rate=ev["shadow_miss_rate"],
     )
+    if ev["shadow_miss_unassessed"]:
+        gate.reasons.append("Пропуски модели не оценены: в проверенных случаях теневого прогона нет "
+                            "находок врача по кодам модели")
     gate.reasons.extend(ev["slice_problems"])
     licence_block = data_provenance.gate_reason(ev["data_provenance"])
     if licence_block:
         gate.reasons.append(licence_block)
-        gate.ok = False
+    gate.ok = not gate.reasons      # любая причина — отказ (не только учтённые в evaluate_promotion)
     return gate, ev
 
 

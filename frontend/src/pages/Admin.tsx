@@ -336,7 +336,12 @@ function EvidenceView({ gate }: { gate: PromotionGateResult }) {
             <td>Теневой прогон</td>
             <td>
               проверено врачом {e.shadow_reviewed_cases}; расхождений{" "}
-              {e.shadow_rejection_rate === null ? "—" : `${Math.round(e.shadow_rejection_rate * 100)}%`}
+              {e.shadow_rejection_rate === null ? "—" : `${Math.round(e.shadow_rejection_rate * 100)}%`}; пропусков{" "}
+              {e.shadow_miss_rate == null
+                ? e.shadow_miss_unassessed
+                  ? "не оценены (нет находок врача)"
+                  : "—"
+                : `${Math.round(e.shadow_miss_rate * 100)}%`}
             </td>
           </tr>
           <tr>
