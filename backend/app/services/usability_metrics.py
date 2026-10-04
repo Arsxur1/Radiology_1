@@ -48,7 +48,10 @@ def _quantiles(values: list[float]) -> dict:
     if not values:
         return {"n": 0, "median": None, "p10": None, "p90": None}
     v = sorted(values)
-    q = (lambda p: v[min(len(v) - 1, int(p * (len(v) - 1) + 0.5))])
+
+    def q(p: float) -> float:
+        return v[min(len(v) - 1, int(p * (len(v) - 1) + 0.5))]
+
     return {"n": len(v), "median": round(statistics.median(v), 1), "p10": round(q(0.1), 1),
             "p90": round(q(0.9), 1)}
 
