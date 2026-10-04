@@ -96,8 +96,10 @@ def test_endpoint_roles(db, monkeypatch):
     app.dependency_overrides[get_db] = lambda: db
     try:
         c = TestClient(app)
-        assert c.get("/pilot/usability", headers={"X-Debug-Subject": "a", "X-Debug-Roles": "auditor"}).status_code == 200
-        assert c.get("/pilot/usability", headers={"X-Debug-Subject": "r", "X-Debug-Roles": "radiologist"}
-                     ).status_code == 403
+        def as_role(role: str) -> int:
+            return c.get("/pilot/usability", headers={"X-Debug-Subject": "u", "X-Debug-Roles": role}).status_code
+
+        assert as_role("auditor") == 200 and as_role("admin") == 200
+        assert as_role("radiologist") == 403
     finally:
         app.dependency_overrides.clear()
