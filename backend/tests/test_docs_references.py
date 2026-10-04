@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DOCS = ["UPRAVLENIE-RISKAMI.md", "TEKHNICHESKIY-FAYL.md", "TRACEABILITY.md", "KHRANENIE-DANNYKH.md",
         "PRILOZHENIE-DANNYE-NCMC.md", "YUZABILITI.md", "RESHENIYA-NCMC.md", "OBZOR-SISTEMY.md"]
 TESTS = {p.name for p in (ROOT / "backend" / "tests").glob("test_*.py")}
+UI_TESTS = {p.name for p in (ROOT / "frontend" / "src").rglob("*.test.tsx")}
 DOC_NAMES = {p.name for p in (ROOT / "docs").glob("*.md")} | {p.name for p in ROOT.glob("*.md")}
 
 
@@ -25,8 +26,10 @@ def test_referenced_tests_and_docs_exist(doc):
     names = set(re.findall(r"`([^`\s]+)`", text))
     missing_tests = sorted(n for n in names if re.fullmatch(r"test_\w+\.py", n) and n not in TESTS)
     missing_docs = sorted(n for n in names if re.fullmatch(r"[A-Z][A-Z0-9-]+\.md", n) and n not in DOC_NAMES)
+    missing_ui = sorted(n for n in names if re.fullmatch(r"\w+\.test\.tsx", n) and n not in UI_TESTS)
     assert not missing_tests, f"{doc}: нет тестов {missing_tests}"
     assert not missing_docs, f"{doc}: нет документов {missing_docs}"
+    assert not missing_ui, f"{doc}: нет тестов интерфейса {missing_ui}"
 
 
 def test_risk_file_covers_every_hazard_in_summary():
