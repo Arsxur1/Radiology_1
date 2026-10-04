@@ -325,8 +325,28 @@ export function FindingCard({
   onChange: (f: FindingOut) => void;
   modality?: string;
 }) {
-  // Момент, когда карточка стала видна врачу — для расчёта затраченного времени.
+  // Момент, когда карточка стала видна врачу (хотя бы наполовину на экране) — для расчёта
+  // затраченного времени (юзабилити, IEC 62366). Раньше отсчёт шёл от загрузки страницы, и у
+  // карточек ниже экрана время завышалось. Без IntersectionObserver — от появления карточки.
   const shownAt = useRef<number>(Date.now());
+  const cardRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    let seen = false;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (!seen && entries.some((e) => e.isIntersecting)) {
+          seen = true;
+          shownAt.current = Date.now();
+          io.disconnect();
+        }
+      },
+      { threshold: 0.5 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -360,7 +380,7 @@ export function FindingCard({
   }
 
   return (
-    <div className="card">
+    <div className="card" ref={cardRef}>
       <div className="row spread">
         <strong>{finding.label ?? finding.code ?? "структура"}</strong>
         <StatusBadge f={finding} />

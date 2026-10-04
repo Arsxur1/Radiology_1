@@ -32,6 +32,9 @@ class SeriesOut(BaseModel):
     is_3d_capable: bool
     # Возможен текст с данными пациента в пикселях: врач видит предупреждение, в обучение не идёт.
     burned_in_risk: bool = False
+    # Действующая модель отказалась анализировать серию (вне границ применимости, SR-7): врач
+    # должен отличать «ИИ не нашёл» от «ИИ не смотрел». [{"model": "имя@версия", "reasons": [...]}]
+    ai_refusals: list[dict] = []
 
 
 class StudyOut(BaseModel):
@@ -106,7 +109,50 @@ def get_study(
     audit.record_access(db, user, AuditAction.PATIENT_ACCESS, entity_type="study", entity_id=study.id,
                         details={"what": "открыто исследование", "patient_id": str(study.patient_id)})
     pending, reports = _worklist_status(db, [study.id])
-    return _to_study_out(study, pending.get(study.id, 0), reports.get(study.id, "none"))
+    return _to_study_out(study, pending.get(study.id, 0), reports.get(study.id, "none"),
+                         refusals=_visible_refusals(db, study))
+
+
+def _visible_refusals(db: Session, study: Study) -> dict:
+    """Отказы действующих моделей по сериям — если результаты ИИ врачу видны в этом режиме.
+
+    Кандидаты в SHADOW врачу не показываются (как и их результаты); отказ, после которого
+    модель всё же отработала на серии (например, исправили возраст), снят.
+    """
+    from app.models.ml import AiRefusal, InferenceResult, ModelStatus, ModelVersion
+    from app.services.mode_state import model_results_visible
+
+    series_ids = [s.id for s in study.series]
+    if not series_ids:
+        return {}
+    rows = db.execute(
+        select(AiRefusal.series_id, AiRefusal.model_version_id, AiRefusal.reasons, AiRefusal.created_at,
+               ModelVersion.name, ModelVersion.semver, Series.modality)
+        .join(ModelVersion, AiRefusal.model_version_id == ModelVersion.id)
+        .join(Series, AiRefusal.series_id == Series.id)
+        .where(AiRefusal.series_id.in_(series_ids), ModelVersion.status == ModelStatus.ACTIVE)
+        .order_by(AiRefusal.created_at)
+    ).all()
+    from sqlalchemy import func
+
+    # Последний успешный запуск модели на серии.
+    ran = {(sid, mid): t for sid, mid, t in db.execute(
+        select(InferenceResult.series_id, InferenceResult.model_version_id, func.max(InferenceResult.created_at))
+        .where(InferenceResult.series_id.in_(series_ids))
+        .group_by(InferenceResult.series_id, InferenceResult.model_version_id)
+    ).all()}
+    latest: dict = {}
+    for sid, mid, reasons, at, name, semver, modality in rows:
+        done = ran.get((sid, mid))
+        if done is not None and done >= at:
+            latest.pop((sid, mid), None)
+            continue
+        if model_results_visible(db, modality):
+            latest[(sid, mid)] = {"model": f"{name}@{semver}", "reasons": list(reasons or [])}
+    out: dict = {}
+    for (sid, _mid), item in latest.items():
+        out.setdefault(sid, []).append(item)
+    return out
 
 
 def _worklist_status(db: Session, study_ids: list[uuid.UUID]) -> tuple[dict, dict]:
@@ -148,7 +194,8 @@ def _worklist_status(db: Session, study_ids: list[uuid.UUID]) -> tuple[dict, dic
     return pending, reports
 
 
-def _to_study_out(study: Study, ai_pending: int = 0, report_status: str = "none") -> StudyOut:
+def _to_study_out(study: Study, ai_pending: int = 0, report_status: str = "none",
+                  refusals: dict | None = None) -> StudyOut:
     return StudyOut(
         study_date=study.study_date,
         patient_age_years=study.patient_age_years,
@@ -172,6 +219,7 @@ def _to_study_out(study: Study, ai_pending: int = 0, report_status: str = "none"
                 lossy_compressed=s.lossy_compressed,
                 is_3d_capable=s.is_3d_capable(),
                 burned_in_risk=bool(s.burned_in_risk),
+                ai_refusals=(refusals or {}).get(s.id, []),
             )
             for s in study.series
         ],

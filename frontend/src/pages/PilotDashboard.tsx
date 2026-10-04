@@ -6,6 +6,7 @@ import { ApiError, api } from "../api/client";
 import type { PilotDashboard as Dashboard } from "../api/types";
 import { WeeklyColumns } from "../components/charts/WeeklyColumns";
 import { SiteDataReadiness } from "../components/SiteDataReadiness";
+import { UsabilityPanel } from "../components/UsabilityPanel";
 
 const pct = (v: number | null) =>
   v === null ? "—" : `${(v * 100).toFixed(1)}%`;
@@ -287,6 +288,8 @@ export function PilotDashboard() {
             <KeyValueTable head={["Вид", "Сообщений"]} rows={Object.entries(d.incidents.by_kind)} />
           </div>
         )}
+
+        <UsabilityPanel days={weeks * 7} />
 
         <SiteDataReadiness days={weeks * 7} />
       </div>

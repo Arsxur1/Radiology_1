@@ -14,7 +14,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 DOCS = ["UPRAVLENIE-RISKAMI.md", "TEKHNICHESKIY-FAYL.md", "TRACEABILITY.md", "KHRANENIE-DANNYKH.md",
-        "PRILOZHENIE-DANNYE-NCMC.md"]
+        "PRILOZHENIE-DANNYE-NCMC.md", "YUZABILITI.md"]
 TESTS = {p.name for p in (ROOT / "backend" / "tests").glob("test_*.py")}
 DOC_NAMES = {p.name for p in (ROOT / "docs").glob("*.md")} | {"README.md"}
 

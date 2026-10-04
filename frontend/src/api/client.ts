@@ -29,6 +29,7 @@ import type {
   ShadowReport,
   StudyOut,
   TemporalSeries,
+  UsabilityReport,
   VocabularyConcept,
 } from "./types";
 
@@ -132,6 +133,7 @@ export const api = {
     }),
 
   pilotDashboard: (weeks = 12) => request<PilotDashboard>(`/pilot/dashboard?weeks=${weeks}`),
+  usability: (days = 90) => request<UsabilityReport>(`/pilot/usability?days=${days}`),
   siteData: (days = 90) => request<SiteDataReport>(`/pilot/site-data?days=${days}`),
 
   seriesPreviewUrl: (seriesId: string) => requestBlobUrl(`/studies/series/${seriesId}/preview`),

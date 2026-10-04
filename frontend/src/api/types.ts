@@ -13,6 +13,8 @@ export interface SeriesOut {
   is_3d_capable: boolean;
   /** Возможен текст с данными пациента в пикселях: в обучение не идёт. */
   burned_in_risk?: boolean;
+  /** Действующая модель отказалась анализировать серию (SR-7) — с причинами. */
+  ai_refusals?: { model: string; reasons: string[] }[];
 }
 
 export interface StudyOut {
@@ -389,6 +391,30 @@ export interface SiteDataReport {
   min_description_count: number;
   issues: string[];
   ready: boolean;
+}
+
+// ── Юзабилити (IEC 62366) ─────────────────────────────────────────────────
+export interface DecisionTimes {
+  n: number;
+  median: number | null;
+  p10: number | null;
+  p90: number | null;
+}
+
+export interface UsabilityReport {
+  days: number;
+  ai_decisions: { total: number; accepted: number; modified: number; rejected: number };
+  decision_seconds: Record<"accepted" | "modified" | "rejected", DecisionTimes>;
+  fast_confirm: { threshold_seconds: number; count: number; share: number | null; max_share: number };
+  independent_reading: {
+    signed_studies: number;
+    signed_with_ai_drafts: number;
+    signed_without_ai_drafts: number;
+    own_findings_share_without_drafts: number | null;
+    own_findings_share_with_drafts: number | null;
+  };
+  turnaround_hours: DecisionTimes;
+  notes: string[];
 }
 
 // ── Журнал инцидентов (ТЗ, раздел 9 п. 7) ─────────────────────────────────

@@ -10,6 +10,7 @@ from app.core.roles import Role
 from app.db.session import get_db
 from app.services.pilot_dashboard import build_dashboard
 from app.services.site_data_report import build_site_data_report
+from app.services.usability_metrics import build_usability
 
 router = APIRouter(prefix="/pilot", tags=["pilot"])
 
@@ -31,3 +32,13 @@ def site_data(
 ) -> dict:
     """Готовность данных площадки: возраст, область, кодировка — по аппаратам (агрегаты)."""
     return build_site_data_report(db, days=days)
+
+
+@router.get("/usability")
+def usability(
+    days: int = Query(90, ge=1, le=730),
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_roles(Role.ADMIN, Role.AUDITOR)),
+) -> dict:
+    """Юзабилити (IEC 62366): быстрые подтверждения, самостоятельное чтение, время до подписи."""
+    return build_usability(db, days=days)

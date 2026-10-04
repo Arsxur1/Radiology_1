@@ -121,6 +121,12 @@ export function StudyReview() {
               </span>
             )}
           </h3>
+          {(se.ai_refusals ?? []).map((r) => (
+            <div key={r.model} className="card" style={{ borderColor: "var(--model)" }} role="status">
+              <strong>ИИ не анализировал эту серию</strong> ({r.model}) — вне границ применимости модели:{" "}
+              {r.reasons.join("; ")}. Черновиков ИИ здесь не будет; это не означает, что патологии нет.
+            </div>
+          ))}
           {(findings[se.id] ?? []).length === 0 ? (
             <p className="muted">
               Черновиков ИИ и находок врача пока нет. Отсутствие черновиков ИИ не означает
