@@ -48,6 +48,8 @@ class StudyOut(BaseModel):
     ai_pending: int = 0
     # none — заключения нет; draft — черновик; signed — подписано.
     report_status: str = "none"
+    # Пациент не сопоставлен однозначно при приёме: прошлые исследования могут быть не видны.
+    patient_link_review: bool = False
 
 
 @router.get("", response_model=list[StudyOut])
@@ -152,6 +154,7 @@ def _to_study_out(study: Study, ai_pending: int = 0, report_status: str = "none"
         patient_age_years=study.patient_age_years,
         ai_pending=ai_pending,
         report_status=report_status,
+        patient_link_review=bool(study.patient and study.patient.link_review),
         id=study.id,
         patient_id=study.patient_id,
         study_instance_uid=study.study_instance_uid,

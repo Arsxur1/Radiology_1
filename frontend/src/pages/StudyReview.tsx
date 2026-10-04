@@ -99,6 +99,14 @@ export function StudyReview() {
       <h2>
         {study.modality} · {study.description ?? study.study_instance_uid}
       </h2>
+      {study.patient_link_review && (
+        <div className="card" style={{ borderColor: "var(--model)" }} role="alert">
+          <strong>Пациент не сопоставлен однозначно.</strong> Номер карты при приёме совпал у нескольких
+          записей, поэтому исследование не привязано ни к одной из них.{" "}
+          <b>Прошлые исследования этого ребёнка здесь могут не отображаться</b> — сравнение в
+          динамике неполное. Сопоставление — на странице «Пациенты» («Требуют сопоставления»).
+        </div>
+      )}
       {hasRole("radiologist", "clinician") && <PatientIdentity studyId={study.id} />}
       {hasRole("radiologist", "clinician") && <PacsPriors studyId={study.id} />}
 

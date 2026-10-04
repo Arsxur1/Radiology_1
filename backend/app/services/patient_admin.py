@@ -69,6 +69,9 @@ def merge_patients(
         ident.merged_into = source_id  # провенанс: откуда пришёл идентификатор
 
     source.merged_into_id = target_id
+    # Сопоставление выполнено: запись, ждавшая ручной привязки, слита в выбранного пациента.
+    resolved_review = source.link_review
+    source.link_review = False
     db.flush()
 
     audit.record(
@@ -83,6 +86,7 @@ def merge_patients(
             "target": str(target_id),
             "moved_studies": len(studies),
             "moved_identifiers": len(identifiers),
+            "resolved_link_review": resolved_review,
         },
     )
     return MergeOutcome(target_id, len(studies), len(identifiers))
@@ -152,3 +156,23 @@ def split_patient(
         },
     )
     return SplitOutcome(new_patient.id, moved_studies, moved_ident)
+
+
+def link_review_queue(db: Session) -> list[Patient]:
+    """Записи, созданные при неоднозначном сопоставлении и ещё не разобранные (FR-1)."""
+    return list(db.execute(
+        select(Patient).where(Patient.link_review.is_(True), Patient.merged_into_id.is_(None))
+        .order_by(Patient.created_at)
+    ).scalars())
+
+
+def keep_separate(db: Session, *, patient_id: uuid.UUID, actor: str) -> Patient:
+    """Решение человека: это отдельный пациент — снять пометку, записать в аудит."""
+    p = db.get(Patient, patient_id)
+    if p is None or not p.link_review or p.is_merged:
+        raise MergeError("Запись не ждёт сопоставления")
+    p.link_review = False
+    db.flush()
+    audit.record(db, actor=actor, action=AuditAction.PATIENT_ACCESS, entity_type="patient", entity_id=p.id,
+                 details={"event": "link_review_keep_separate", "candidates": p.link_candidates or []})
+    return p

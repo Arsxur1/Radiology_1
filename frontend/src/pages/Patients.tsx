@@ -5,9 +5,10 @@
 // источника и приёмника → объединение. Разъединение — выделение новой записи
 // с выбранными идентификаторами и исследованиями. Все операции пишутся в аудит.
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
-import type { PatientOut, StudyOut } from "../api/types";
+import type { LinkReviewOut, PatientOut, StudyOut } from "../api/types";
 
 // Номер карты и ФИО в обезличенном контуре не хранятся — только ключевые токены (SR-9).
 // Показываем вид идентификатора и короткий отпечаток токена: по нему видно, что у двух
@@ -33,6 +34,76 @@ function IdentifierList({ p }: { p: PatientOut }) {
       ))}
       {p.identifiers.length === 0 && <li className="muted">нет идентификаторов</li>}
     </ul>
+  );
+}
+
+// Записи, созданные при неоднозначном номере карты: присоединить к одному из кандидатов
+// или подтвердить, что это другой пациент. Решает человек; ФИО сверяется через раскрытие
+// личности на исследовании (с аудитом), здесь — только отпечатки и число исследований.
+function LinkReviewQueue() {
+  const [queue, setQueue] = useState<LinkReviewOut[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => {
+    api
+      .linkReviewQueue()
+      .then(setQueue)
+      .catch((e) => setErr(e instanceof ApiError ? e.message : String(e)));
+  }, []);
+  useEffect(load, [load]);
+
+  async function act(fn: () => Promise<unknown>) {
+    setErr(null);
+    try {
+      await fn();
+      load();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : String(e));
+    }
+  }
+
+  if (queue === null && !err) return null;
+  return (
+    <div className="card" style={queue && queue.length ? { borderColor: "var(--model)" } : undefined}>
+      <strong>Требуют сопоставления{queue ? `: ${queue.length}` : ""}</strong>
+      <p className="muted" style={{ margin: "4px 0 8px" }}>
+        При приёме номер карты совпал у нескольких записей — исследование не привязано молча. Пока
+        запись не сопоставлена, врач видит предупреждение, а прошлые исследования ребёнка не
+        попадают в сравнение. Сверьте пациента (раскрытие личности на исследовании) и выберите.
+      </p>
+      {err && <div className="error">{err}</div>}
+      {queue?.length === 0 && <p className="muted">Нет.</p>}
+      {queue?.map((q) => (
+        <div key={q.patient.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 8, marginTop: 8 }}>
+          <div className="row spread">
+            <span>
+              Новая запись {q.patient.id.slice(0, 8)}… · исследований: {q.patient.study_count} ·{" "}
+              <Link to={`/patients/${q.patient.id}/dynamics`}>исследования</Link>
+            </span>
+            <button style={{ whiteSpace: "nowrap" }} onClick={() => act(() => api.keepSeparate(q.patient.id))}>
+              Это другой пациент
+            </button>
+          </div>
+          <ul style={{ margin: "6px 0" }}>
+            {q.candidates.map((c) => (
+              <li key={c.id} className="row" style={{ gap: 8 }}>
+                <span>
+                  Кандидат {c.id.slice(0, 8)}… · исследований: {c.study_count} ·{" "}
+                  {c.identifiers.map(idLabel).join("; ") || "нет идентификаторов"} ·{" "}
+                  <Link to={`/patients/${c.id}/dynamics`}>исследования</Link>
+                </span>
+                <button
+                  className="primary"
+                  style={{ whiteSpace: "nowrap" }}
+                  onClick={() => act(() => api.mergePatients(q.patient.id, c.id))}
+                >
+                  Присоединить к нему
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -168,6 +239,8 @@ export function Patients() {
         Поиск учитывает транслитерацию кириллица/латиница. Объедините записи одного человека или
         разъедините ошибочно слитые (FR-1). Все операции фиксируются в аудите.
       </p>
+
+      <LinkReviewQueue />
 
       <div className="card">
         <div className="row">

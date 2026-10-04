@@ -22,7 +22,7 @@
 | Сущность | Реализация |
 |---|---|
 | `patient` | `models/patient.py::Patient` (UUID — единственный PK) |
-| `patient_identifier` | `models/patient.py::PatientIdentifier` (транслитерация); объединение/разъединение — `services/patient_admin.py`, `api/routes_patients.py`, `patient.merged_into_id` (миграция 0003), тесты `test_patient_admin.py`; UI `frontend/src/pages/Patients.tsx` (поиск, merge, split) |
+| `patient_identifier` | `models/patient.py::PatientIdentifier` (транслитерация); неоднозначное сопоставление при приёме (номер карты у нескольких записей) — отдельная запись с пометкой `Patient.link_review` и кандидатами (миграция 0017): предупреждение врачу на исследовании, очередь «Требуют сопоставления» (`GET /patients/link-review`, «Присоединить» = merge, «Это другой пациент» = `POST /patients/{id}/keep-separate`, оба в аудит), проверка «Сопоставление пациентов» в «Состоянии системы» — `test_patient_link_review.py`; объединение/разъединение — `services/patient_admin.py`, `api/routes_patients.py`, `patient.merged_into_id` (миграция 0003), тесты `test_patient_admin.py`; UI `frontend/src/pages/Patients.tsx` (поиск, merge, split) |
 | `patient_pseudonym_map` | `models/idmap.py` (идентифицирующий контур) |
 | `study` / `series` | `models/imaging.py` (толщина среза, воксель, transfer syntax, lossy) |
 | `model_version` | `models/ml.py::ModelVersion` (границы применимости в JSONB) |

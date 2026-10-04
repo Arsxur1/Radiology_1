@@ -34,6 +34,13 @@ class PatientOut(BaseModel):
     is_merged: bool
     identifiers: list[IdentifierOut]
     study_count: int
+    # Ждёт ручного сопоставления (неоднозначный номер карты при приёме).
+    link_review: bool = False
+
+
+class LinkReviewOut(BaseModel):
+    patient: PatientOut
+    candidates: list[PatientOut]
 
 
 class MergeIn(BaseModel):
@@ -63,7 +70,45 @@ def _out(db: Session, p: Patient) -> PatientOut:
             for i in idents
         ],
         study_count=len(p.studies),
+        link_review=p.link_review,
     )
+
+
+@router.get("/link-review", response_model=list[LinkReviewOut])
+def link_review(
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_roles(Role.ADMIN, Role.RADIOLOGIST)),
+) -> list[LinkReviewOut]:
+    """Записи, ждущие ручного сопоставления, с кандидатами (только внутренние UUID и отпечатки)."""
+    audit.record_access(db, user, AuditAction.PATIENT_ACCESS, entity_type="patient_link_review",
+                        details={"what": "очередь сопоставления пациентов"})
+    out = []
+    for p in patient_admin.link_review_queue(db):
+        cands = [db.get(Patient, uuid.UUID(c)) for c in (p.link_candidates or [])]
+        # Кандидат мог быть объединён позже — показываем действующую запись.
+        resolved = {}
+        for c in cands:
+            while c is not None and c.merged_into_id is not None:
+                c = db.get(Patient, c.merged_into_id)
+            if c is not None and c.id != p.id:
+                resolved[c.id] = c
+        out.append(LinkReviewOut(patient=_out(db, p), candidates=[_out(db, c) for c in resolved.values()]))
+    return out
+
+
+@router.post("/{patient_id}/keep-separate", response_model=PatientOut)
+def keep_separate(
+    patient_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_roles(Role.ADMIN, Role.RADIOLOGIST)),
+) -> PatientOut:
+    """Сопоставление разобрано: это отдельный пациент."""
+    try:
+        p = patient_admin.keep_separate(db, patient_id=patient_id, actor=user.subject)
+        db.commit()
+    except MergeError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return _out(db, p)
 
 
 @router.get("/{patient_id}", response_model=PatientOut)

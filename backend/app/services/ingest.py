@@ -42,8 +42,10 @@ def _get_or_create_patient(
     if plan.real_mrn:
         result = match_patient(db, id_type="mrn", raw_value=plan.real_mrn)
         if result.needs_manual_confirmation:
-            # Неоднозначность — создаём нового пациента, помечаем к ручной привязке.
-            patient = Patient()
+            # Неоднозначность — создаём нового пациента, помечаем к ручной привязке: врач видит
+            # предупреждение на исследовании, администратор — в списке «Требуют сопоставления».
+            patient = Patient(link_review=True,
+                              link_candidates=sorted(str(c.id) for c in result.candidates))
             db.add(patient)
             db.flush()
             return patient, True

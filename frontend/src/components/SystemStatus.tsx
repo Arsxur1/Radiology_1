@@ -22,6 +22,7 @@ const NAMES: Record<string, string> = {
   models: "Действующие модели",
   backup: "Резервная копия",
   incidents: "Инциденты (серьёзные открытые)",
+  patient_links: "Сопоставление пациентов",
 };
 const FUNCS: [string, string][] = [
   ["viewer", "Просмотр"],

@@ -27,6 +27,7 @@ export interface StudyOut {
   patient_age_years: number | null;
   ai_pending: number;
   report_status: "none" | "draft" | "signed";
+  patient_link_review: boolean;
 }
 
 export type FindingSource = "model" | "physician";
@@ -227,6 +228,12 @@ export interface PatientOut {
   is_merged: boolean;
   identifiers: PatientIdentifierOut[];
   study_count: number;
+  link_review: boolean;
+}
+
+export interface LinkReviewOut {
+  patient: PatientOut;
+  candidates: PatientOut[];
 }
 
 export type RegistrationStage = "rigid" | "affine" | "deformable";

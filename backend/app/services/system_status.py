@@ -196,6 +196,15 @@ def check_incidents(db_factory) -> tuple[bool, str, bool]:
     return True, f"открыто {sm['open']}, из них серьёзных {sm['open_serious']}", sm["open_serious"] > 0
 
 
+def check_patient_links(db_factory) -> tuple[bool, str, bool]:
+    """Пациенты, ждущие ручного сопоставления (неоднозначный номер карты при приёме)."""
+    from app.services.patient_admin import link_review_queue
+
+    with db_factory() as s:
+        n = len(link_review_queue(s))
+    return True, (f"ждут сопоставления: {n}" if n else "все сопоставлены"), n > 0
+
+
 def collect() -> dict:
     from app.db.session import IdMapSessionLocal, SessionLocal
     from app.services.orthanc import clean_client, raw_client
@@ -218,6 +227,7 @@ def collect() -> dict:
         run("models", lambda: check_models(SessionLocal)),
         run("backup", lambda: check_backup(r)),
         run("incidents", lambda: check_incidents(SessionLocal)),
+        run("patient_links", lambda: check_patient_links(SessionLocal)),
     ]
     return summarize(checks)
 
@@ -242,7 +252,7 @@ def summarize(checks: list[Check]) -> dict:
                 "checked_at": time.time()}
     overall = "down" if "down" in (functions["viewer"], functions["ingest"]) else \
         "degraded" if any(v != "ok" for v in functions.values()) \
-        or any(by.get(n, Check("", True, "")).warn for n in ("backup", "incidents")) \
+        or any(by.get(n, Check("", True, "")).warn for n in ("backup", "incidents", "patient_links")) \
         else "ok"
     return {"status": overall, "functions": functions, "checks": [asdict(c) for c in checks],
             "checked_at": time.time()}

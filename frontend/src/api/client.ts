@@ -11,6 +11,7 @@ import type {
   IncidentKinds,
   IncidentOut,
   IncidentStatus,
+  LinkReviewOut,
   PriorOut,
   SystemStatusOut,
   ModeOut,
@@ -288,6 +289,9 @@ export const api = {
   searchPatients: (value: string) =>
     request<PatientOut[]>(`/patients/search/by-identifier?value=${encodeURIComponent(value)}`),
 
+  linkReviewQueue: () => request<LinkReviewOut[]>("/patients/link-review"),
+  keepSeparate: (patientId: string) =>
+    request<PatientOut>(`/patients/${patientId}/keep-separate`, { method: "POST" }),
   mergePatients: (sourceId: string, targetId: string) =>
     request<PatientOut>("/patients/merge", {
       method: "POST",

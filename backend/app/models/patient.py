@@ -13,7 +13,7 @@ from sqlalchemy import Boolean, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDMixin
-from app.db.types import GUID
+from app.db.types import GUID, JSONB
 
 
 class Patient(UUIDMixin, TimestampMixin, Base):
@@ -24,6 +24,12 @@ class Patient(UUIDMixin, TimestampMixin, Base):
     merged_into_id: Mapped[uuid.UUID | None] = mapped_column(
         GUID(), ForeignKey("patient.id"), nullable=True
     )
+
+    # Неоднозначное сопоставление при приёме (номер карты есть у нескольких пациентов): исследование
+    # не привязано молча, создана отдельная запись — её нужно сопоставить вручную (FR-1).
+    # Кандидаты — внутренние UUID пациентов с тем же идентификатором.
+    link_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    link_candidates: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     # Никаких идентифицирующих полей: только внутренний UUID и связи.
     identifiers: Mapped[list[PatientIdentifier]] = relationship(
