@@ -6,9 +6,7 @@
   "HttpPort": 8042,
   "RemoteAccessAllowed": true,
   "AuthenticationEnabled": true,
-  "RegisteredUsers": {
-    "medviz": "change_me_orthanc"
-  },
+  "// RegisteredUsers": "только из .env: ORTHANC_USERNAME / ORTHANC_PASSWORD (переменная ORTHANC__REGISTERED_USERS в docker-compose.yml); без них узел закрыт",
   "DicomWeb": {
     "Enable": true,
     "Root": "/dicom-web/"

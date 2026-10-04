@@ -5,6 +5,8 @@
 
 medviz-web  → http://<host>/*       (рабочее место врача через шлюз)
 medviz-ohif → http://<host>:3000/*  (просмотрщик)
+medviz-backend — только аудитория токенов: все способы получить токен выключены, секрет
+перевыпускается (в старом realm был известный «change_me_keycloak»).
 Плюс настройки безопасности входа (SECURITY) — применяются и к уже работающему realm:
 импорт realm-medviz.json срабатывает только при первом запуске Keycloak.
 Администратор Keycloak — из KEYCLOAK_ADMIN / KEYCLOAK_ADMIN_PASSWORD. Идемпотентно.
@@ -52,6 +54,17 @@ SECURITY: dict = {
 }
 
 
+# Клиент backend — только аудитория (aud) токенов medviz-web/medviz-ohif. Сам он токены не
+# выдаёт: иначе вход по паролю в обход страницы входа. Совпадает с realm-medviz.json (тест).
+AUDIENCE_CLIENT = "medviz-backend"
+AUDIENCE_ONLY: dict = {
+    "standardFlowEnabled": False,
+    "directAccessGrantsEnabled": False,
+    "implicitFlowEnabled": False,
+    "serviceAccountsEnabled": False,
+}
+
+
 def targets(host: str) -> dict[str, list[str]]:
     return {
         "medviz-web": [f"http://{host}/*", f"https://{host}/*"],
@@ -80,6 +93,13 @@ def main() -> None:
         client["webOrigins"] = ["+"]
         httpx.put(f"{base}/admin/realms/{realm}/clients/{client['id']}", json=client, headers=h).raise_for_status()
         print(f"{client_id}: {', '.join(client['redirectUris'])}")
+    c = httpx.get(f"{base}/admin/realms/{realm}/clients", params={"clientId": AUDIENCE_CLIENT}, headers=h)
+    client = c.raise_for_status().json()[0]
+    httpx.put(f"{base}/admin/realms/{realm}/clients/{client['id']}", json={**client, **AUDIENCE_ONLY},
+              headers=h).raise_for_status()
+    # Новый случайный секрет вместо известного из старого realm (значение не печатаем).
+    httpx.post(f"{base}/admin/realms/{realm}/clients/{client['id']}/client-secret", headers=h).raise_for_status()
+    print(f"{AUDIENCE_CLIENT}: только аудитория токенов, выдача токенов выключена, секрет перевыпущен")
     r = httpx.get(f"{base}/admin/realms/{realm}", headers=h).raise_for_status().json()
     httpx.put(f"{base}/admin/realms/{realm}", json={**r, **SECURITY}, headers=h).raise_for_status()
     print("безопасность входа: защита от подбора, политика паролей, журнал входов — применены")

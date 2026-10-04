@@ -34,17 +34,11 @@
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
-      "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": true,
-      "secret": "change_me_keycloak",
-      "redirectUris": [
-        "http://localhost:8000/*",
-        "http://localhost:3000/*"
-      ],
-      "webOrigins": [
-        "http://localhost:3000",
-        "http://localhost:8000"
-      ]
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "description": "Только аудитория токенов medviz-web/medviz-ohif; сам токены не выдаёт"
     },
     {
       "clientId": "medviz-web",

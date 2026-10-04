@@ -115,6 +115,23 @@ def check_pseudonym_key() -> tuple[bool, str]:
     return key_state()
 
 
+# Секреты, которые в шаблоне .env — заглушки «change_me…» (scripts/init_env.sh их заменяет).
+DEFAULT_SECRET_VARS = ("POSTGRES_PASSWORD", "IDMAP_POSTGRES_PASSWORD", "MINIO_ROOT_PASSWORD", "ORTHANC_PASSWORD",
+                       "KEYCLOAK_ADMIN_PASSWORD", "KEYCLOAK_DB_PASSWORD", "BACKEND_SECRET_KEY", "PSEUDONYM_KEY")
+
+
+def check_default_secrets(env: dict | None = None) -> tuple[bool, str, bool]:
+    """Учебные пароли из шаблона .env (имена переменных, не значения)."""
+    import os
+
+    env = os.environ if env is None else env
+    left = [k for k in DEFAULT_SECRET_VARS if str(env.get(k, "")).startswith("change_me")]
+    if left:
+        return True, ("учебные значения из шаблона: " + ", ".join(left)
+                      + " — сгенерировать (scripts/init_env.sh) до приёма данных"), True
+    return True, "заглушек нет", False
+
+
 def check_raw_backlog() -> tuple[bool, str, bool]:
     """Снимки, застрявшие в orthanc-raw: исходники с ФИО, не дошедшие до врача."""
     from datetime import UTC, datetime
@@ -242,6 +259,7 @@ def collect() -> dict:
         run("ingest_folder", check_ingest_folder),
         run("debug_auth", check_debug_auth),
         run("pseudonym_key", check_pseudonym_key),
+        run("default_secrets", check_default_secrets),
         run("disk", check_disk),
         run("queue", lambda: check_queue(r)),
         run("workers", check_workers),
@@ -273,7 +291,8 @@ def summarize(checks: list[Check]) -> dict:
                 "checked_at": time.time()}
     overall = "down" if "down" in (functions["viewer"], functions["ingest"]) else \
         "degraded" if any(v != "ok" for v in functions.values()) \
-        or any(by.get(n, Check("", True, "")).warn for n in ("backup", "incidents", "patient_links")) \
+        or any(by.get(n, Check("", True, "")).warn
+               for n in ("backup", "incidents", "patient_links", "default_secrets")) \
         else "ok"
     return {"status": overall, "functions": functions, "checks": [asdict(c) for c in checks],
             "checked_at": time.time()}

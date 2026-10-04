@@ -27,8 +27,6 @@ class Settings(BaseSettings):
     postgres_db: str = Field("medviz", alias="POSTGRES_DB")
     postgres_user: str = Field("medviz", alias="POSTGRES_USER")
     postgres_password: str = Field("medviz", alias="POSTGRES_PASSWORD")
-    postgres_audit_user: str = Field("medviz_audit", alias="POSTGRES_AUDIT_USER")
-    postgres_audit_password: str = Field("medviz_audit", alias="POSTGRES_AUDIT_PASSWORD")
 
     # Идентифицирующий контур (таблица ID↔UUID, SR-9)
     idmap_host: str = Field("postgres-idmap", alias="IDMAP_POSTGRES_HOST")

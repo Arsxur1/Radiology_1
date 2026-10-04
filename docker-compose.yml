@@ -101,6 +101,10 @@ services:
     volumes:
       - ./infra/orthanc/orthanc-raw.json:/etc/orthanc/orthanc.json:ro
       - orthanc_raw_data:/var/lib/orthanc/db
+    environment:
+      # Учётная запись — только из .env (в JSON её нет: без .env узел закрыт, а не открыт с
+      # учебным паролем). Те же значения берут backend и шлюз.
+      ORTHANC__REGISTERED_USERS: '{"${ORTHANC_USERNAME}": "${ORTHANC_PASSWORD}"}'
     ports:
       - "4242:4242"   # DICOM C-STORE от H-PACS — единственный порт Orthanc в сети клиники
       #                 (брандмауэром ограничить адресом H-PACS, см. PACS-NCMC.md)
@@ -113,6 +117,10 @@ services:
     volumes:
       - ./infra/orthanc/orthanc-clean.json:/etc/orthanc/orthanc.json:ro
       - orthanc_clean_data:/var/lib/orthanc/db
+    environment:
+      # Учётная запись — только из .env (в JSON её нет: без .env узел закрыт, а не открыт с
+      # учебным паролем). Те же значения берут backend и шлюз.
+      ORTHANC__REGISTERED_USERS: '{"${ORTHANC_USERNAME}": "${ORTHANC_PASSWORD}"}'
     ports:
       - "127.0.0.1:8043:8042"   # врачи получают снимки только через шлюз (вход + HTTPS)
 

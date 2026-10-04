@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,7 +36,17 @@ from app.core.config import get_settings
 settings = get_settings()
 logging.basicConfig(level=settings.log_level)
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # Бакеты хранилища — в фоне: запуск API (и просмотр) не ждёт хранилище (SR-4).
+    from app.services.storage import ensure_buckets_safely
+
+    threading.Thread(target=ensure_buckets_safely, name="ensure-buckets", daemon=True).start()
+    yield
+
+
 app = FastAPI(
+    lifespan=_lifespan,
     title="Платформа анализа медицинских изображений",
     version="0.1.0",
     description=(

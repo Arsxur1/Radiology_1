@@ -118,3 +118,15 @@ def test_gateway_strips_debug_headers():
     auth = conf[conf.index("location = /_auth"):conf.index("}", conf.index("location = /_auth"))]
     for block in (api, auth):
         assert 'proxy_set_header X-Debug-Subject "";' in block and 'proxy_set_header X-Debug-Roles "";' in block
+
+
+def test_default_secrets_named_not_shown():
+    from app.services.system_status import Check, check_default_secrets, summarize
+
+    ok, detail, warn = check_default_secrets({"POSTGRES_PASSWORD": "change_me_postgres",
+                                              "ORTHANC_PASSWORD": "a1b2c3", "PSEUDONYM_KEY": "change_me_x"})
+    assert ok and warn and "POSTGRES_PASSWORD" in detail and "PSEUDONYM_KEY" in detail
+    assert "ORTHANC_PASSWORD" not in detail and "change_me_postgres" not in detail and "a1b2c3" not in detail
+    assert check_default_secrets({}) == (True, "заглушек нет", False)
+    checks = [Check("orthanc_clean", True, ""), Check("default_secrets", True, "", warn=True)]
+    assert summarize(checks)["status"] == "degraded"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.signals import worker_ready
 
 from app.core.config import get_settings
 
@@ -26,3 +27,11 @@ celery_app.conf.update(
     # Результаты задач (идентификаторы серий, счётчики) — сутки; политика хранения.
     result_expires=86400,
 )
+
+
+@worker_ready.connect
+def _ensure_buckets(**_kwargs) -> None:
+    """Бакеты хранилища — до первой задачи приёма (на новой установке их нет)."""
+    from app.services.storage import ensure_buckets_safely
+
+    ensure_buckets_safely()

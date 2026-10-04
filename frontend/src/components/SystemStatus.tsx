@@ -18,6 +18,7 @@ const NAMES: Record<string, string> = {
   disk: "Диск с данными",
   debug_auth: "Отладочный вход без пароля",
   pseudonym_key: "Ключ псевдонимизации",
+  default_secrets: "Учебные пароли из шаблона",
   queue: "Очередь задач",
   workers: "Воркеры анализа",
   models: "Действующие модели",

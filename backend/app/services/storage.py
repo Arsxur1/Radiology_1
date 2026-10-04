@@ -29,11 +29,36 @@ def ensure_buckets() -> None:
             client.make_bucket(bucket)
 
 
+def ensure_buckets_safely() -> bool:
+    """Создать бакеты при старте API/воркера; недоступное хранилище не мешает запуску (SR-4).
+
+    Раньше бакеты создавали только демо-данные и бэкап: на чистой установке первый же
+    принятый снимок падал с NoSuchBucket, а исходник с ФИО оставался в приёмнике.
+    """
+    import logging
+
+    try:
+        ensure_buckets()
+        return True
+    except Exception as e:  # noqa: BLE001 - запуск не должен падать из-за хранилища
+        logging.getLogger(__name__).warning("Бакеты хранилища не проверены: %s", type(e).__name__)
+        return False
+
+
 def put_object(bucket: str, key: str, data: bytes, content_type: str = "application/dicom") -> str:
     import io
 
+    from minio.error import S3Error
+
     client = get_minio()
-    client.put_object(bucket, key, io.BytesIO(data), length=len(data), content_type=content_type)
+    try:
+        client.put_object(bucket, key, io.BytesIO(data), length=len(data), content_type=content_type)
+    except S3Error as e:
+        if e.code != "NoSuchBucket":
+            raise
+        # Бакета нет (новая установка, хранилище пересоздано) — создать и повторить один раз.
+        ensure_buckets()
+        client.put_object(bucket, key, io.BytesIO(data), length=len(data), content_type=content_type)
     return f"{bucket}/{key}"
 
 
