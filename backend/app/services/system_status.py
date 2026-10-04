@@ -196,6 +196,26 @@ def check_incidents(db_factory) -> tuple[bool, str, bool]:
     return True, f"открыто {sm['open']}, из них серьёзных {sm['open_serious']}", sm["open_serious"] > 0
 
 
+INGEST_FOLDER_STALE_SECONDS = 600
+
+
+def check_ingest_folder() -> tuple[bool, str, bool]:
+    """Исходники с ФИО, оставшиеся в папке приёма (не загрузились в приёмник)."""
+    from pathlib import Path
+
+    from app.core.config import get_settings
+    from app.workers.folder_watcher import leftover_files
+
+    root = Path(get_settings().ingest_watch_dir)
+    if not root.is_dir():
+        return True, "папка приёма не используется", False
+    n = leftover_files(root, older_than=INGEST_FOLDER_STALE_SECONDS)
+    if n:
+        return True, (f"файлов старше 10 мин: {n} — исходники с ФИО не загрузились; "
+                      "проверить формат и наблюдатель папки"), True
+    return True, "пусто", False
+
+
 def check_patient_links(db_factory) -> tuple[bool, str, bool]:
     """Пациенты, ждущие ручного сопоставления (неоднозначный номер карты при приёме)."""
     from app.services.patient_admin import link_review_queue
@@ -219,6 +239,7 @@ def collect() -> dict:
         run("orthanc_raw", lambda: check_orthanc(raw_client)),
         run("watcher", lambda: check_watcher(r)),
         run("raw_backlog", check_raw_backlog),
+        run("ingest_folder", check_ingest_folder),
         run("debug_auth", check_debug_auth),
         run("pseudonym_key", check_pseudonym_key),
         run("disk", check_disk),
@@ -243,8 +264,8 @@ def summarize(checks: list[Check]) -> dict:
 
     functions = {
         "viewer": state(["orthanc_clean"]),
-        "ingest": state(["orthanc_raw", "watcher", "raw_backlog", "queue", "workers", "postgres", "postgres_idmap",
-                         "redis", "s3", "disk", "pseudonym_key"]),
+        "ingest": state(["orthanc_raw", "watcher", "raw_backlog", "ingest_folder", "queue", "workers",
+                         "postgres", "postgres_idmap", "redis", "s3", "disk", "pseudonym_key"]),
         "ai": state(["workers", "models", "s3"]),
     }
     if not by.get("debug_auth", Check("", True, "")).ok:

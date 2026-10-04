@@ -47,12 +47,16 @@ def calibration_proposal(
     # Истина врача — одним пакетом по всем сериям с подписанным заключением.
     truth_by_series = truths_for_series(
         db, list({r[1]: SeriesKey(r[1], r[2]) for r in rows if r[2] in finalized}.values()), finalized)
+    # Калибровка порогов — тоже обучение на данных площадки: отзыв согласия исключает пациента.
+    from app.services.patient_admin import training_excluded_patient_ids
+
+    excluded = training_excluded_patient_ids(db)
     seen: set = set()
     held_out = 0
     truths: dict[str, list[int]] = {c: [] for c in codes}
     scores: dict[str, list[float]] = {c: [] for c in codes}
     for metrics, series_id, study_id, patient_id in rows:
-        if series_id in seen or study_id not in finalized:
+        if series_id in seen or study_id not in finalized or patient_id in excluded:
             continue
         seen.add(series_id)
         if _split(str(patient_id), 0.15, 0.10) == "test":

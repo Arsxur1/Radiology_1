@@ -36,6 +36,13 @@ class PatientOut(BaseModel):
     study_count: int
     # Ждёт ручного сопоставления (неоднозначный номер карты при приёме).
     link_review: bool = False
+    # Отзыв согласия: исследования не идут в обучение и калибровку.
+    training_excluded: bool = False
+
+
+class TrainingExclusionIn(BaseModel):
+    excluded: bool
+    basis: str          # код из GET /patients/training-exclusion-bases
 
 
 class LinkReviewOut(BaseModel):
@@ -71,7 +78,32 @@ def _out(db: Session, p: Patient) -> PatientOut:
         ],
         study_count=len(p.studies),
         link_review=p.link_review,
+        training_excluded=p.training_excluded,
     )
+
+
+@router.get("/training-exclusion-bases")
+def training_exclusion_bases(
+    _: CurrentUser = Depends(require_roles(Role.ADMIN)),
+) -> list[dict]:
+    return [{"code": k, "label": v} for k, v in patient_admin.TRAINING_EXCLUSION_BASES.items()]
+
+
+@router.post("/{patient_id}/training-exclusion", response_model=PatientOut)
+def training_exclusion(
+    patient_id: uuid.UUID,
+    payload: TrainingExclusionIn,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_roles(Role.ADMIN)),
+) -> PatientOut:
+    """Отзыв согласия на использование данных для обучения (или снятие), с аудитом."""
+    try:
+        p = patient_admin.set_training_exclusion(db, patient_id=patient_id, excluded=payload.excluded,
+                                                 actor=user.subject, basis=payload.basis)
+        db.commit()
+    except MergeError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+    return _out(db, p)
 
 
 @router.get("/link-review", response_model=list[LinkReviewOut])

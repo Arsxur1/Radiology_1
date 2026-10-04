@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     # Автоанализ стартует через столько секунд после последнего среза серии.
     analysis_delay_seconds: int = Field(20, alias="ANALYSIS_DELAY_SECONDS")
     ingest_watch_dir: str = Field("/data/ingest", alias="INGEST_WATCH_DIR")
+    # Исходник в папке приёма содержит ФИО — после загрузки в приёмник удаляется.
+    ingest_delete_after_upload: bool = Field(True, alias="INGEST_DELETE_AFTER_UPLOAD")
 
     # Аутентификация OIDC (Keycloak)
     keycloak_url: str = Field("http://keycloak:8080", alias="KEYCLOAK_URL")

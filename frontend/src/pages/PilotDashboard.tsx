@@ -235,6 +235,9 @@ export function PilotDashboard() {
             {d.training_data.records} серий с метками (подписано:{" "}
             {d.training_data.finalized}); без возраста пропущено:{" "}
             {d.training_data.skipped_no_age}
+            {!!d.training_data.skipped_training_excluded && (
+              <>; исключено по отзыву согласия: {d.training_data.skipped_training_excluded}</>
+            )}
           </div>
           <KeyValueTable
             head={["Находка", "Позитивов"]}

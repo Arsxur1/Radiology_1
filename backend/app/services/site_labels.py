@@ -139,6 +139,8 @@ def site_manifest(
     validate_fraction: float = 0.10,
 ) -> tuple[list[dict], dict]:
     """Записи в формате app.training.manifest.ManifestRecord + сводный отчёт."""
+    from app.services.patient_admin import training_excluded_patient_ids
+
     finalized = finalized_study_ids(db)
     rows = db.execute(
         select(Series.id, Series.study_id, Series.modality, Series.series_instance_uid, Series.object_prefix,
@@ -147,8 +149,13 @@ def site_manifest(
         # Возможен текст с данными пациента в пикселях — в обучение не идёт (SR-9).
         .where(Series.burned_in_risk.is_(False))
     ).all()
+    # Отзыв согласия на использование для обучения — исследования пациента не выгружаются.
+    excluded = training_excluded_patient_ids(db)
+    skipped_excluded = sum(1 for r in rows if r.patient_id in excluded)
+    rows = [r for r in rows if r.patient_id not in excluded]
     records: list[dict] = []
     report = {"records": 0, "skipped_unlabeled": 0, "skipped_no_age": 0,
+              "skipped_training_excluded": skipped_excluded,
               "finalized": 0, "positives": {}, "populations": {}}
     truths = truths_for_series(db, [SeriesKey(r.id, r.study_id) for r in rows], finalized)
     for series in rows:

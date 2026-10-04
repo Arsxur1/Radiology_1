@@ -23,4 +23,6 @@ celery_app.conf.update(
     timezone=_settings.tz,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    # Результаты задач (идентификаторы серий, счётчики) — сутки; политика хранения.
+    result_expires=86400,
 )

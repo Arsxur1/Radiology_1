@@ -232,6 +232,7 @@ export interface PatientOut {
   identifiers: PatientIdentifierOut[];
   study_count: number;
   link_review: boolean;
+  training_excluded: boolean;
 }
 
 export interface LinkReviewOut {
@@ -296,6 +297,7 @@ export interface PilotDashboard {
     populations: Record<string, number>;
     finalized: number;
     skipped_no_age: number;
+    skipped_training_excluded?: number;
     positives: { code: string; label: string; count: number }[];
     splits: Record<string, number>;
   };

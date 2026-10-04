@@ -289,6 +289,12 @@ export const api = {
   searchPatients: (value: string) =>
     request<PatientOut[]>(`/patients/search/by-identifier?value=${encodeURIComponent(value)}`),
 
+  trainingExclusionBases: () => request<{ code: string; label: string }[]>("/patients/training-exclusion-bases"),
+  setTrainingExclusion: (patientId: string, excluded: boolean, basis: string) =>
+    request<PatientOut>(`/patients/${patientId}/training-exclusion`, {
+      method: "POST",
+      body: JSON.stringify({ excluded, basis }),
+    }),
   linkReviewQueue: () => request<LinkReviewOut[]>("/patients/link-review"),
   keepSeparate: (patientId: string) =>
     request<PatientOut>(`/patients/${patientId}/keep-separate`, { method: "POST" }),

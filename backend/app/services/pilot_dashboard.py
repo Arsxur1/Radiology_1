@@ -142,6 +142,7 @@ def build_dashboard(db: Session, *, weeks: int = 12, now: datetime | None = None
             "populations": manifest_report["populations"],
             "finalized": manifest_report["finalized"],
             "skipped_no_age": manifest_report["skipped_no_age"],
+            "skipped_training_excluded": manifest_report["skipped_training_excluded"],
             "positives": [
                 {"code": c, "label": (by_code(c).label_ru if by_code(c) else c), "count": n}
                 for c, n in sorted(manifest_report["positives"].items(), key=lambda kv: (-kv[1], kv[0]))

@@ -5,9 +5,19 @@
 x-backend-env: &backend-env
   env_file: .env
 
+# Логи контейнеров: ротация, чтобы не заполнить диск и не хранить логи бессрочно
+# (политика хранения — docs/KHRANENIE-DANNYKH.md). 5 файлов по 50 МБ на сервис ≈ несколько
+# недель обычной работы; меняется переменными LOG_MAX_SIZE / LOG_MAX_FILE в .env.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-50m}
+    max-file: ${LOG_MAX_FILE:-5}
+
 services:
   # ─── Метаданные (доверенный контур) ───────────────────────────────────────
   postgres:
+    logging: *default-logging
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -27,6 +37,7 @@ services:
 
   # ─── Идентифицирующий контур: таблица ID↔UUID (SR-9), отдельная БД ─────────
   postgres-idmap:
+    logging: *default-logging
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -44,6 +55,7 @@ services:
   # Учётные записи сотрудников (Keycloak). Отдельная БД: не пропадают при пересоздании
   # контейнера Keycloak и попадают в ночной бэкап (хеши паролей — зашифрованно).
   postgres-keycloak:
+    logging: *default-logging
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
@@ -60,6 +72,7 @@ services:
 
   # ─── Объектное хранилище ──────────────────────────────────────────────────
   minio:
+    logging: *default-logging
     # S3-совместимое хранилище (имя сервиса историческое). По умолчанию — SeaweedFS:
     # образ minio/minio больше не публикуется на Docker Hub. Свой MinIO — см.
     # docker-compose.minio.yml. Ключи доступа — MINIO_ROOT_USER / MINIO_ROOT_PASSWORD.
@@ -82,6 +95,7 @@ services:
 
   # ─── DICOM-узлы ───────────────────────────────────────────────────────────
   orthanc-raw:
+    logging: *default-logging
     image: orthancteam/orthanc:latest
     restart: unless-stopped
     volumes:
@@ -93,6 +107,7 @@ services:
       - "127.0.0.1:8042:8042"   # REST: здесь исходники с ФИО до обезличивания — только локально
 
   orthanc-clean:
+    logging: *default-logging
     image: orthancteam/orthanc:latest
     restart: unless-stopped
     volumes:
@@ -103,6 +118,7 @@ services:
 
   # ─── Очередь ──────────────────────────────────────────────────────────────
   redis:
+    logging: *default-logging
     image: redis:7-alpine
     restart: unless-stopped
     volumes:
@@ -110,6 +126,7 @@ services:
 
   # ─── Аутентификация ───────────────────────────────────────────────────────
   keycloak:
+    logging: *default-logging
     # Версия закреплена (проверена на стенде). Боевой режим: учётные записи в PostgreSQL,
     # а не во встроенной H2 внутри контейнера (start-dev терял бы всех при пересоздании).
     image: ${KEYCLOAK_IMAGE:-quay.io/keycloak/keycloak:26.0.7}
@@ -140,6 +157,7 @@ services:
 
   # ─── Backend API ──────────────────────────────────────────────────────────
   backend:
+    logging: *default-logging
     build: ./backend
     restart: unless-stopped
     <<: *backend-env
@@ -159,6 +177,7 @@ services:
 
   # ─── Воркеры приёма/обезличивания ─────────────────────────────────────────
   worker:
+    logging: *default-logging
     build:
       context: ./backend
       args:
@@ -179,6 +198,7 @@ services:
 
   # ─── Наблюдатель за сетевой папкой (FR-1, резервный путь приёма) ───────────
   folder-watcher:
+    logging: *default-logging
     build: ./backend
     restart: unless-stopped
     <<: *backend-env
@@ -190,6 +210,7 @@ services:
 
   # ─── Наблюдатель orthanc-raw: снимки от PACS → очередь обезличивания (FR-1) ──
   orthanc-watcher:
+    logging: *default-logging
     build: ./backend
     restart: unless-stopped
     <<: *backend-env
@@ -201,6 +222,7 @@ services:
 
   # ─── Шлюз: рабочее место врача + API + DICOMweb на одном адресе (:80) ──────
   web:
+    logging: *default-logging
     build: ./frontend
     restart: unless-stopped
     environment:
@@ -225,6 +247,7 @@ services:
 
   # ─── Просмотрщик ──────────────────────────────────────────────────────────
   ohif:
+    logging: *default-logging
     image: ohif/app:latest
     restart: unless-stopped
     # entrypoint образа пересжимает и перезаписывает app-config.js — с файлом,

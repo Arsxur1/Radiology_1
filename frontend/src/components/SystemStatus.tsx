@@ -14,6 +14,7 @@ const NAMES: Record<string, string> = {
   orthanc_raw: "Приёмник от PACS (orthanc-raw)",
   watcher: "Наблюдатель приёма",
   raw_backlog: "Застрявшие в приёмнике (с ФИО)",
+  ingest_folder: "Папка приёма (исходники с ФИО)",
   disk: "Диск с данными",
   debug_auth: "Отладочный вход без пароля",
   pseudonym_key: "Ключ псевдонимизации",

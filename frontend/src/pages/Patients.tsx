@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api/client";
+import { hasRole } from "../auth";
 import type { LinkReviewOut, PatientOut, StudyOut } from "../api/types";
 
 // Номер карты и ФИО в обезличенном контуре не хранятся — только ключевые токены (SR-9).
@@ -103,6 +104,52 @@ function LinkReviewQueue() {
           </ul>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Отзыв согласия законного представителя на использование данных для улучшения моделей.
+// Только администратор; основание — из списка (без свободного текста); всё — в аудит.
+function TrainingExclusion({ patient, onDone }: { patient: PatientOut; onDone: () => void }) {
+  const [bases, setBases] = useState<{ code: string; label: string }[]>([]);
+  const [basis, setBasis] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    api.trainingExclusionBases().then(setBases).catch(() => setBases([]));
+  }, []);
+  const next = !patient.training_excluded;
+  const options = bases.filter((b) => (next ? b.code !== "consent_restored" : b.code === "consent_restored"));
+  return (
+    <div className="row" style={{ flexWrap: "wrap", gap: 8, margin: "6px 0" }}>
+      {patient.training_excluded ? (
+        <span className="badge badge-model">исключён из обучения</span>
+      ) : (
+        <span className="muted">данные могут использоваться для обучения</span>
+      )}
+      <select value={basis} onChange={(e) => setBasis(e.target.value)} aria-label="Основание">
+        <option value="">— основание —</option>
+        {options.map((b) => (
+          <option key={b.code} value={b.code}>
+            {b.label}
+          </option>
+        ))}
+      </select>
+      <button
+        disabled={!basis}
+        onClick={async () => {
+          setErr(null);
+          try {
+            await api.setTrainingExclusion(patient.id, next, basis);
+            setBasis("");
+            onDone();
+          } catch (e) {
+            setErr(e instanceof ApiError ? e.message : String(e));
+          }
+        }}
+      >
+        {next ? "Исключить из обучения" : "Вернуть в обучение"}
+      </button>
+      {err && <span className="error">{err}</span>}
     </div>
   );
 }
@@ -308,6 +355,7 @@ export function Patients() {
               {target === p.id ? "✓ приёмник" : "Выбрать приёмником"}
             </button>
           </div>
+          {!p.is_merged && hasRole("admin") && <TrainingExclusion patient={p} onDone={search} />}
           {!p.is_merged && <SplitPanel patient={p} onDone={search} />}
         </div>
       ))}

@@ -69,6 +69,10 @@ def merge_patients(
         ident.merged_into = source_id  # провенанс: откуда пришёл идентификатор
 
     source.merged_into_id = target_id
+    # Отзыв согласия на обучение сохраняется: объединённая запись исключается, если исключена
+    # хотя бы одна из исходных (иначе объединение молча вернуло бы данные в обучение).
+    if source.training_excluded:
+        target.training_excluded = True
     # Сопоставление выполнено: запись, ждавшая ручной привязки, слита в выбранного пациента.
     resolved_review = source.link_review
     source.link_review = False
@@ -119,7 +123,8 @@ def split_patient(
     if not identifier_ids and not study_ids:
         raise MergeError("Не указано, что выделять (идентификаторы/исследования)")
 
-    new_patient = Patient()
+    # Выделенная запись наследует отзыв согласия: кто именно отзывал — разберёт человек.
+    new_patient = Patient(training_excluded=source.training_excluded)
     db.add(new_patient)
     db.flush()
 
@@ -176,3 +181,32 @@ def keep_separate(db: Session, *, patient_id: uuid.UUID, actor: str) -> Patient:
     audit.record(db, actor=actor, action=AuditAction.PATIENT_ACCESS, entity_type="patient", entity_id=p.id,
                  details={"event": "link_review_keep_separate", "candidates": p.link_candidates or []})
     return p
+
+
+def set_training_exclusion(db: Session, *, patient_id: uuid.UUID, excluded: bool, actor: str,
+                           basis: str) -> Patient:
+    """Отметить отзыв согласия на обучение (или его снятие). Основание — из закрытого списка."""
+    if basis not in TRAINING_EXCLUSION_BASES:
+        raise MergeError("Неизвестное основание")
+    p = db.get(Patient, patient_id)
+    if p is None or p.is_merged:
+        raise MergeError("Пациент не найден или объединён в другую запись")
+    previous, p.training_excluded = p.training_excluded, excluded
+    db.flush()
+    audit.record(db, actor=actor, action=AuditAction.PATIENT_ACCESS, entity_type="patient", entity_id=p.id,
+                 details={"event": "training_exclusion", "excluded": excluded, "previous": previous,
+                          "basis": basis})
+    return p
+
+
+# Основания — без свободного текста (в нём легко оказаться ФИО).
+TRAINING_EXCLUSION_BASES = {
+    "consent_withdrawn": "Законный представитель отозвал согласие",
+    "consent_not_given": "Согласие не было получено",
+    "ethics_or_legal": "Решение этического комитета или юриста",
+    "consent_restored": "Согласие получено вновь (снятие исключения)",
+}
+
+
+def training_excluded_patient_ids(db: Session) -> set:
+    return set(db.execute(select(Patient.id).where(Patient.training_excluded.is_(True))).scalars())

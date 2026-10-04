@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.models.imaging import Series, Study
 from app.models.ml import Correction, CorrectionType, Finding
+from app.models.patient import Patient
 
 
 @dataclass
@@ -53,6 +54,9 @@ def build_query(filters: ExportFilters):
         .outerjoin(Finding, Correction.finding_id == Finding.id)
         # Возможен текст с данными пациента в пикселях — в обучающую выгрузку не идёт (SR-9).
         .where(Series.burned_in_risk.is_(False))
+        # Отзыв согласия на использование для обучения.
+        .join(Patient, Study.patient_id == Patient.id)
+        .where(Patient.training_excluded.is_(False))
     )
     if filters.correction_types:
         stmt = stmt.where(Correction.correction_type.in_(filters.correction_types))

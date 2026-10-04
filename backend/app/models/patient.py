@@ -30,6 +30,10 @@ class Patient(UUIDMixin, TimestampMixin, Base):
     # Кандидаты — внутренние UUID пациентов с тем же идентификатором.
     link_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     link_candidates: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # Отзыв согласия на использование данных для улучшения моделей (цель 2 приложения к
+    # договору): исследования пациента не идут в обучение, калибровку и обучающие выгрузки.
+    # На работу врача и контроль качества не влияет. Отметка и снятие — в аудите.
+    training_excluded: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # Никаких идентифицирующих полей: только внутренний UUID и связи.
     identifiers: Mapped[list[PatientIdentifier]] = relationship(
