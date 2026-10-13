@@ -88,7 +88,9 @@ def main() -> None:
         if tcp.ok:
             steps.append(echo := d.check_echo(node))
             if echo.ok:
-                steps.append(d.check_find(node, a.find_date))
+                steps.append(find := d.check_find(node, a.find_date))
+                if find.ok:
+                    steps.append(d.check_find_charset(node, date.today().strftime("%Y%m%d")))
     host, _, port = a.receiver.rpartition(":")
     steps.append(d.check_receiver(host, int(port), a.receiver_aet or s.pacs_local_aet))
     if a.wait:

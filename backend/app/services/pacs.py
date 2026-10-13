@@ -65,6 +65,8 @@ class StudyQuery:
         from pydicom.dataset import Dataset
 
         ds = Dataset()
+        # Просим ответ в UTF-8: PACS, которые это поддерживают, вернут описания с кириллицей.
+        ds.SpecificCharacterSet = "ISO_IR 192"
         ds.QueryRetrieveLevel = "STUDY"
         ds.StudyInstanceUID = self.study_instance_uid or ""
         ds.PatientID = self.patient_id or ""

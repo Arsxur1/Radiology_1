@@ -68,4 +68,5 @@ if [ ! -d "$ROOT/frontend/dist" ]; then (cd "$ROOT/frontend" && npm run build >"
 start ui 'vite preview --port 4173' 'exec npx vite preview --port 4173 --strictPort' frontend
 
 for _ in $(seq 1 30); do curl -sf -o /dev/null localhost:8000/health && break; sleep 1; done
+for _ in $(seq 1 30); do curl -sf -o /dev/null localhost:4173/ && break; sleep 1; done
 echo "API: $(curl -s -o /dev/null -w '%{http_code}' localhost:8000/health)  интерфейс: $(curl -s -o /dev/null -w '%{http_code}' localhost:4173/)"

@@ -93,3 +93,21 @@ def test_receiver(scp):
     assert d.check_receiver("127.0.0.1", scp("MEDVIZ_RAW"), "MEDVIZ_RAW").ok
     down = d.check_receiver("127.0.0.1", _free_port(), "MEDVIZ_RAW", timeout=2)
     assert not down.ok and "4242" in down.remedy
+
+
+def test_charset_verdict_cyrillic_latin_and_empty():
+    from app.services.pacs_diagnose import charset_verdict
+
+    ok = charset_verdict({"ISO_IR 192"}, answered=3)
+    assert ok.ok is True and "ISO_IR 192" in ok.detail
+    latin = charset_verdict({"ISO_IR 100"}, answered=3)
+    assert latin.ok is False and "нет кириллицы" in latin.detail and "ISO_IR 192" in latin.remedy
+    none = charset_verdict(set(), answered=2)
+    assert none.ok is False and "кодировка не указана" in none.detail
+    assert charset_verdict(set(), answered=0).ok is None
+
+
+def test_find_query_asks_for_utf8():
+    from app.services.pacs import StudyQuery
+
+    assert StudyQuery(patient_id="X").to_find_identifier().SpecificCharacterSet == "ISO_IR 192"

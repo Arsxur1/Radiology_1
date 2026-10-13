@@ -127,6 +127,62 @@ def check_find(node: PacsNode, study_date: str, timeout: int = 30) -> Step:
     return Step("C-FIND (поиск прошлых исследований)", True, f"исследований за {study_date}: {n}")
 
 
+# Кодировки, в которых PACS может передать кириллицу (описания исследований, ФИО).
+CYRILLIC_CHARSETS = {"ISO_IR 192", "ISO_IR 144", "ISO 2022 IR 144"}
+
+
+def charset_verdict(charsets: set[str], answered: int) -> Step:
+    """Вывод по кодировкам ответов C-FIND (чистая функция — тестируется без PACS)."""
+    name = "Кодировка ответов PACS (кириллица)"
+    if not answered:
+        return Step(name, None, "за неделю нет исследований — кодировку не проверить")
+    if charsets & CYRILLIC_CHARSETS:
+        return Step(name, True, "ответы с кириллицей: " + ", ".join(sorted(charsets & CYRILLIC_CHARSETS)))
+    shown = ", ".join(sorted(charsets)) if charsets else "кодировка не указана"
+    return Step(name, False,
+                f"PACS отвечает на поиск в «{shown}» — в ней нет кириллицы: описания прошлых "
+                "исследований врач увидит без русских и узбекских букв",
+                "Включить в PACS ответы на C-FIND в UTF-8 (ISO_IR 192) или кириллице (ISO_IR 144): "
+                "настройка кодировки DICOM / Character Set (у Orthanc — DefaultEncoding: Utf8). "
+                "Сами снимки это не затрагивает: их кодировка проверяется при приёме.")
+
+
+def check_find_charset(node: PacsNode, today: str, timeout: int = 30) -> Step:
+    """C-FIND за неделю с запросом UTF-8: в какой кодировке PACS отдаёт описания.
+
+    Найдено на эмуляторе H-PACS 13 октября: PACS в Latin-1 заменяет кириллицу пробелами ещё до
+    ответа, и на нашей стороне её не восстановить — только настройкой PACS.
+    """
+    from datetime import datetime, timedelta
+
+    from pydicom.dataset import Dataset
+    from pynetdicom.sop_class import StudyRootQueryRetrieveInformationModelFind as Find
+
+    end = datetime.strptime(today, "%Y%m%d")
+    q = Dataset()
+    q.SpecificCharacterSet = "ISO_IR 192"
+    q.QueryRetrieveLevel = "STUDY"
+    q.StudyDate = f"{(end - timedelta(days=7)):%Y%m%d}-{end:%Y%m%d}"
+    q.StudyInstanceUID = ""
+    q.StudyDescription = ""
+    assoc, seen = _associate(node, [Find], timeout)
+    if not assoc.is_established:
+        text, fix = _assoc_failure(node, assoc, seen)
+        return Step("Кодировка ответов PACS (кириллица)", False, text, fix)
+    charsets: set[str] = set()
+    answered = 0
+    try:
+        for status, ident in assoc.send_c_find(q, Find):
+            if status and status.Status in (0xFF00, 0xFF01) and ident is not None:
+                answered += 1
+                cs = ident.get("SpecificCharacterSet")
+                values = [cs] if isinstance(cs, str) else list(cs or [])   # одно значение или несколько
+                charsets.update(str(v).strip() for v in values if v)
+    finally:
+        assoc.release()
+    return charset_verdict(charsets, answered)
+
+
 def check_receiver(host: str, port: int, aet: str, timeout: int = 10) -> Step:
     """Наш приёмник (orthanc-raw) слушает DICOM — сюда PACS шлёт снимки."""
     node = PacsNode(aet=aet, host=host, port=port, local_aet="MEDVIZ_CHECK")
